@@ -1,5 +1,26 @@
-// Importar API client
-import { auth, focos, areas, notificacoes } from './api.js';
+// Variáveis para API client (serão importadas depois)
+let auth, focos, areas, notificacoes;
+
+// Função para importar API client de forma segura
+async function loadAPIClient() {
+    try {
+        const apiModule = await import('./api.js');
+        auth = apiModule.auth;
+        focos = apiModule.focos;
+        areas = apiModule.areas;
+        notificacoes = apiModule.notificacoes;
+        console.log('✅ API client importado com sucesso');
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao importar API client:', error);
+        // Criar stubs para não quebrar o código
+        auth = { logout: () => {}, isAuthenticated: () => false, getCurrentUser: () => null };
+        focos = { list: async () => [], create: async () => {}, update: async () => {}, delete: async () => {} };
+        areas = { list: async () => [], create: async () => {}, update: async () => {}, delete: async () => {} };
+        notificacoes = { list: async () => [], contarNaoLidas: async () => ({ total: 0 }) };
+        return false;
+    }
+}
 
 // Configuração
 const API_BASE_URL = 'http://localhost:3000';
@@ -40,11 +61,17 @@ function waitForLeaflet(maxAttempts = 50, interval = 100) {
         let attempts = 0;
         const checkLeaflet = () => {
             attempts++;
-            if (typeof L !== 'undefined' && typeof L.map === 'function') {
-                console.log('Leaflet carregado com sucesso!');
+            // Verificar tanto L global quanto window.L
+            const Leaflet = window.L || (typeof L !== 'undefined' ? L : null);
+            if (Leaflet && typeof Leaflet.map === 'function') {
+                console.log('✅ Leaflet carregado com sucesso!');
+                // Garantir que está disponível globalmente
+                if (!window.L) window.L = Leaflet;
                 resolve();
             } else if (attempts >= maxAttempts) {
-                console.error('Timeout: Leaflet não carregou após', maxAttempts * interval, 'ms');
+                console.error('❌ Timeout: Leaflet não carregou após', maxAttempts * interval, 'ms');
+                console.error('window.L:', typeof window.L);
+                console.error('L global:', typeof L);
                 reject(new Error('Leaflet não está disponível'));
             } else {
                 setTimeout(checkLeaflet, interval);
@@ -54,35 +81,61 @@ function waitForLeaflet(maxAttempts = 50, interval = 100) {
     });
 }
 
-// Inicializar aplicação diretamente (login removido temporariamente)
-document.addEventListener('DOMContentLoaded', async function() {
-    console.log('DOM carregado, aguardando Leaflet...');
+// Inicializar aplicação quando tudo estiver pronto
+async function initializeApp() {
+    console.log('🚀 Iniciando inicialização da aplicação...');
     
-    // Aguardar Leaflet estar disponível
+    // 1. Carregar API client primeiro
+    console.log('📦 Carregando API client...');
+    await loadAPIClient();
+    
+    // 2. Aguardar Leaflet estar disponível
+    console.log('🗺️ Aguardando Leaflet...');
     try {
         await waitForLeaflet();
     } catch (error) {
-        console.error('Erro ao aguardar Leaflet:', error);
-        alert('Erro: Leaflet não foi carregado. Verifique sua conexão e recarregue a página.');
+        console.error('❌ Erro ao aguardar Leaflet:', error);
+        alert('Erro: Leaflet não foi carregado.\n\nVerifique:\n1. Sua conexão com a internet\n2. Se os scripts estão carregando (F12 > Network)\n3. Recarregue a página (Ctrl+F5)');
         return;
     }
     
-    // Criar usuário padrão sem autenticação
+    // 3. Criar usuário padrão sem autenticação
     currentUser = {
         id: 1,
         nome: 'Usuário Teste',
         email: 'teste@dengue.local',
-        nivel: 'admin' // Dar permissões de admin para testes
+        nivel: 'admin'
     };
     
-    // Esconder modal de login
+    // 4. Esconder modal de login
     const modalLogin = document.getElementById('modal-login');
     if (modalLogin) {
         modalLogin.classList.remove('active');
     }
     
-    console.log('Inicializando aplicação...');
+    // 5. Inicializar aplicação
+    console.log('📱 Inicializando componentes da aplicação...');
     initApp();
+}
+
+// Tentar múltiplos eventos de carregamento
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    // DOM já está carregado, iniciar imediatamente
+    console.log('📄 DOM já está pronto, iniciando...');
+    initializeApp();
+}
+
+// Fallback: window.onload (garante que todos os recursos carregaram)
+window.addEventListener('load', () => {
+    console.log('🪟 window.onload disparado');
+    if (!map) {
+        console.warn('⚠️ Mapa ainda não inicializado no window.onload, tentando novamente...');
+        setTimeout(() => {
+            if (!map) initializeApp();
+        }, 1000);
+    }
 });
 
 // Logout
