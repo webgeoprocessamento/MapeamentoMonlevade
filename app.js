@@ -110,6 +110,126 @@ async function initApp() {
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
     }
+    
+    // Event delegation global para botões dinâmicos do formulário
+    setupFormButtonDelegation();
+}
+
+// Configurar event delegation para botões do formulário (criados dinamicamente)
+function setupFormButtonDelegation() {
+    // Busca rápida de endereço
+    document.addEventListener('click', (e) => {
+        if (e.target && (e.target.id === 'btn-buscar-rapida' || e.target.closest('#btn-buscar-rapida'))) {
+            e.preventDefault();
+            e.stopPropagation();
+            const btn = e.target.closest('#btn-buscar-rapida') || e.target;
+            const inputBuscaRapida = document.getElementById('busca-endereco-rapida');
+            
+            if (inputBuscaRapida) {
+                const termo = inputBuscaRapida.value.trim();
+                if (!termo) {
+                    alert('Digite um endereço para buscar');
+                    return;
+                }
+                
+                btn.disabled = true;
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                (async () => {
+                    try {
+                        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(termo + ', João Monlevade, MG, Brasil')}&limit=1`;
+                        const response = await fetch(url, {
+                            headers: { 'User-Agent': 'Caça-Dengue/1.0' }
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data && data.length > 0) {
+                                const lat = parseFloat(data[0].lat);
+                                const lng = parseFloat(data[0].lon);
+                                
+                                // Atualizar coordenadas
+                                const latInput = document.getElementById('form-latitude');
+                                const lngInput = document.getElementById('form-longitude');
+                                if (latInput) latInput.value = lat.toFixed(6);
+                                if (lngInput) lngInput.value = lng.toFixed(6);
+                                
+                                // Se houver marcador arrastável, mover
+                                if (window.draggableMarker) {
+                                    window.draggableMarker.setLatLng([lat, lng]);
+                                    map.setView([lat, lng], 17);
+                                    updateCoordenadasFromMarker();
+                                } else {
+                                    map.setView([lat, lng], 17);
+                                }
+                                
+                                // Feedback visual
+                                inputBuscaRapida.style.borderColor = '#28a745';
+                                setTimeout(() => {
+                                    inputBuscaRapida.style.borderColor = '#ccc';
+                                }, 2000);
+                            } else {
+                                alert('Endereço não encontrado. Tente ser mais específico.');
+                                inputBuscaRapida.style.borderColor = '#dc3545';
+                                setTimeout(() => {
+                                    inputBuscaRapida.style.borderColor = '#ccc';
+                                }, 2000);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Erro na busca:', error);
+                        alert('Erro ao buscar endereço. Verifique sua conexão.');
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = originalHTML;
+                    }
+                })();
+            }
+        }
+        
+        // Botão copiar coordenadas
+        if (e.target && (e.target.id === 'btn-copiar-coordenadas' || e.target.closest('#btn-copiar-coordenadas'))) {
+            e.preventDefault();
+            e.stopPropagation();
+            const btn = e.target.closest('#btn-copiar-coordenadas') || e.target;
+            const latInput = document.getElementById('form-latitude');
+            const lngInput = document.getElementById('form-longitude');
+            
+            if (latInput && lngInput) {
+                const lat = latInput.value;
+                const lng = lngInput.value;
+                
+                if (lat && lng) {
+                    const texto = `${lat}, ${lng}`;
+                    
+                    navigator.clipboard.writeText(texto).then(() => {
+                        // Feedback visual
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '<i class="fas fa-check"></i>';
+                        btn.style.background = '#28a745';
+                        setTimeout(() => {
+                            btn.innerHTML = originalHTML;
+                            btn.style.background = '';
+                        }, 1500);
+                    }).catch(() => {
+                        alert('Erro ao copiar. Coordenadas: ' + texto);
+                    });
+                }
+            }
+        }
+    });
+    
+    // Enter no campo de busca rápida
+    document.addEventListener('keypress', (e) => {
+        if (e.target && e.target.id === 'busca-endereco-rapida' && e.key === 'Enter') {
+            e.preventDefault();
+            const btnBuscarRapida = document.getElementById('btn-buscar-rapida');
+            if (btnBuscarRapida) {
+                btnBuscarRapida.click();
+            }
+        }
+    });
 }
 
 // Inicializar Mapa
@@ -742,97 +862,6 @@ function initForms() {
         btnBuscarEndereco.addEventListener('click', buscarLocalizacaoPorEndereco);
     }
     
-    // Busca rápida de endereço
-    const btnBuscarRapida = document.getElementById('btn-buscar-rapida');
-    const inputBuscaRapida = document.getElementById('busca-endereco-rapida');
-    if (btnBuscarRapida && inputBuscaRapida) {
-        const realizarBuscaRapida = async () => {
-            const termo = inputBuscaRapida.value.trim();
-            if (!termo) {
-                alert('Digite um endereço para buscar');
-                return;
-            }
-            
-            btnBuscarRapida.disabled = true;
-            btnBuscarRapida.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            
-            try {
-                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(termo + ', João Monlevade, MG, Brasil')}&limit=1`;
-                const response = await fetch(url, {
-                    headers: { 'User-Agent': 'Caça-Dengue/1.0' }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && data.length > 0) {
-                        const lat = parseFloat(data[0].lat);
-                        const lng = parseFloat(data[0].lon);
-                        
-                        // Atualizar coordenadas
-                        document.getElementById('form-latitude').value = lat.toFixed(6);
-                        document.getElementById('form-longitude').value = lng.toFixed(6);
-                        
-                        // Se houver marcador arrastável, mover
-                        if (window.draggableMarker) {
-                            window.draggableMarker.setLatLng([lat, lng]);
-                            map.setView([lat, lng], 17);
-                            updateCoordenadasFromMarker();
-                        } else {
-                            map.setView([lat, lng], 17);
-                        }
-                        
-                        // Feedback visual
-                        inputBuscaRapida.style.borderColor = '#28a745';
-                        setTimeout(() => {
-                            inputBuscaRapida.style.borderColor = '#ccc';
-                        }, 2000);
-                    } else {
-                        alert('Endereço não encontrado. Tente ser mais específico.');
-                        inputBuscaRapida.style.borderColor = '#dc3545';
-                        setTimeout(() => {
-                            inputBuscaRapida.style.borderColor = '#ccc';
-                        }, 2000);
-                    }
-                }
-            } catch (error) {
-                console.error('Erro na busca:', error);
-                alert('Erro ao buscar endereço. Verifique sua conexão.');
-            } finally {
-                btnBuscarRapida.disabled = false;
-                btnBuscarRapida.innerHTML = '<i class="fas fa-search"></i>';
-            }
-        };
-        
-        btnBuscarRapida.addEventListener('click', realizarBuscaRapida);
-        inputBuscaRapida.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                realizarBuscaRapida();
-            }
-        });
-    }
-    
-    // Botão copiar coordenadas
-    const btnCopiarCoordenadas = document.getElementById('btn-copiar-coordenadas');
-    if (btnCopiarCoordenadas) {
-        btnCopiarCoordenadas.addEventListener('click', () => {
-            const lat = document.getElementById('form-latitude').value;
-            const lng = document.getElementById('form-longitude').value;
-            const texto = `${lat}, ${lng}`;
-            
-            navigator.clipboard.writeText(texto).then(() => {
-                // Feedback visual
-                const originalHTML = btnCopiarCoordenadas.innerHTML;
-                btnCopiarCoordenadas.innerHTML = '<i class="fas fa-check"></i>';
-                btnCopiarCoordenadas.style.background = '#28a745';
-                setTimeout(() => {
-                    btnCopiarCoordenadas.innerHTML = originalHTML;
-                    btnCopiarCoordenadas.style.background = '';
-                }, 1500);
-            }).catch(() => {
-                alert('Erro ao copiar. Coordenadas: ' + texto);
-            });
-        });
-    }
 }
 
 // Open Form
