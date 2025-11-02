@@ -188,14 +188,22 @@ function atualizarContadoresModalFoco() {
     const totalVistoria = dadosFocos.filter(f => f.origem === 'vistoria').length;
     const totalDenuncia = dadosFocos.filter(f => f.origem === 'denuncia').length;
     
+    console.log(`🔢 Contadores modal: Total=${totalFocos}, Vistoria=${totalVistoria}, Denúncia=${totalDenuncia}`);
+    
     // Atualizar elementos de estatísticas gerais
     const elemTotalFocos = document.getElementById('modal-total-focos');
     const elemTotalVistoria = document.getElementById('modal-total-vistoria');
     const elemTotalDenuncia = document.getElementById('modal-total-denuncia');
     
-    if (elemTotalFocos) elemTotalFocos.textContent = totalFocos;
-    if (elemTotalVistoria) elemTotalVistoria.textContent = totalVistoria;
-    if (elemTotalDenuncia) elemTotalDenuncia.textContent = totalDenuncia;
+    if (elemTotalFocos) {
+        elemTotalFocos.textContent = totalFocos;
+    }
+    if (elemTotalVistoria) {
+        elemTotalVistoria.textContent = totalVistoria;
+    }
+    if (elemTotalDenuncia) {
+        elemTotalDenuncia.textContent = totalDenuncia;
+    }
     
     // Calcular contadores por tipo
     const tiposFoco = [
@@ -224,13 +232,20 @@ function atualizarContadoresModalFoco() {
                 if (count > 0) {
                     card.setAttribute('data-has-focos', 'true');
                     elemCount.style.display = 'inline-flex';
+                    // Destacar visualmente cards com focos
+                    elemCount.style.background = '#28a745';
+                    elemCount.style.color = 'white';
                 } else {
                     card.removeAttribute('data-has-focos');
                     elemCount.style.display = 'inline-flex'; // Sempre mostrar, mas pode estar em 0
+                    elemCount.style.background = '#6c757d';
+                    elemCount.style.color = 'white';
                 }
             }
         }
     });
+    
+    console.log(`✅ Contadores do modal atualizados para ${totalFocos} focos`);
 }
 
 // Fechar modal de seleção de foco
@@ -844,7 +859,11 @@ function renderMapData() {
     updateHeatmap();
     updateClusters();
     
-    console.log('✅ Mapa renderizado com sucesso!');
+    // Atualizar contadores após renderizar marcadores no mapa
+    updateStats();
+    atualizarContadoresModalFoco();
+    
+    console.log(`✅ Mapa renderizado com sucesso! ${focosAdicionados} focos visíveis no mapa`);
 }
 
 // Inicializar Heatmap
@@ -1672,15 +1691,46 @@ window.deletarItem = async function(type, id) {
 
 // Atualizar Estatísticas
 function updateStats() {
-    document.getElementById('total-focos').textContent = dadosFocos.length;
-    document.getElementById('total-areas-risco').textContent = dadosAreas.length;
+    const totalFocos = dadosFocos.length;
+    const totalAreas = dadosAreas.length;
     
-    // Atualizar badges de contagem nos painéis
+    // Atualizar contadores no header
+    const elemTotalFocos = document.getElementById('total-focos');
+    const elemTotalAreas = document.getElementById('total-areas-risco');
+    
+    if (elemTotalFocos) {
+        elemTotalFocos.textContent = totalFocos;
+        console.log(`📊 Contador header atualizado: ${totalFocos} focos`);
+    }
+    if (elemTotalAreas) {
+        elemTotalAreas.textContent = totalAreas;
+    }
+    
+    // Atualizar badges de contagem nos painéis da sidebar
     const countFocos = document.getElementById('count-focos');
     const countAreas = document.getElementById('count-areas');
     
-    if (countFocos) countFocos.textContent = dadosFocos.length;
-    if (countAreas) countAreas.textContent = dadosAreas.length;
+    if (countFocos) {
+        countFocos.textContent = totalFocos;
+    }
+    if (countAreas) {
+        countAreas.textContent = totalAreas;
+    }
+    
+    // Contar marcadores visíveis no mapa
+    let marcadoresVisiveis = 0;
+    if (marcadoresFocos && map && map.hasLayer(marcadoresFocos)) {
+        marcadoresVisiveis = marcadoresFocos.getLayers().length;
+    } else if (clusterFocos && map && map.hasLayer(clusterFocos)) {
+        // Se estiver usando clusters, contar marcadores dentro dos clusters visíveis
+        const bounds = map.getBounds();
+        marcadoresVisiveis = clusterFocos.getLayers().filter(layer => {
+            const latlng = layer.getLatLng();
+            return bounds.contains(latlng);
+        }).length;
+    }
+    
+    console.log(`📈 Estatísticas atualizadas: ${totalFocos} focos no total, ${marcadoresVisiveis} visíveis no mapa`);
 }
 
 // Atualizar Relatórios
