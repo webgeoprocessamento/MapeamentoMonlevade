@@ -669,12 +669,15 @@ function loadGeoJsonLayers() {
 // Carregar dados da API
 async function loadDadosFromAPI() {
     try {
+        console.log('📥 Carregando dados da API...');
         dadosFocos = await focos.list() || [];
         dadosAreas = await areas.list() || [];
+        console.log(`✅ Dados carregados: ${dadosFocos.length} focos, ${dadosAreas.length} áreas`);
         renderMapData();
     } catch (error) {
-        console.error('Erro ao carregar dados:', error);
+        console.error('❌ Erro ao carregar dados da API:', error);
         // Fallback para localStorage se API não disponível
+        console.log('⚠️ Usando dados locais como fallback...');
         loadDadosLocal();
     }
 }
