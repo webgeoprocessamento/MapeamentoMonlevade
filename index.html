@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caça Dengue - Sistema de Mapeamento e Controle</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet Awesome Markers -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.awesome-markers@2.0.5/dist/leaflet.awesome-markers.css">
+    
+    <!-- Leaflet Heatmap CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Estilos Customizados -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1><i class="fas fa-bug"></i> Caça Dengue</h1>
+            <div class="header-stats">
+                <div class="stat-item">
+                    <i class="fas fa-virus"></i>
+                    <span id="total-casos">0</span> Casos
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-bug"></i>
+                    <span id="total-focos">0</span> Focos
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="total-areas-risco">0</span> Áreas de Risco
+                </div>
+                <div class="stat-item" id="notificacoes-badge" style="position: relative; cursor: pointer;" onclick="abrirPainelNotificacoes()">
+                    <i class="fas fa-bell"></i>
+                    <span id="notificacoes-count">0</span>
+                    <span class="badge-notificacao" id="badge-notificacao" style="display: none;"></span>
+                </div>
+                <div class="stat-item" id="user-info" style="display: none;">
+                    <i class="fas fa-user"></i>
+                    <span id="user-name"></span>
+                    <button class="btn-logout" onclick="logout()" title="Sair">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>Controles</h2>
+            <button class="btn-close" id="closeSidebar"><i class="fas fa-times"></i></button>
+        </div>
+        
+        <!-- Menu de Navegação -->
+        <nav class="sidebar-nav">
+            <button class="nav-btn active" data-panel="map"><i class="fas fa-map"></i> Mapa</button>
+            <button class="nav-btn" data-panel="casos"><i class="fas fa-virus"></i> Casos de Dengue</button>
+            <button class="nav-btn" data-panel="focos"><i class="fas fa-bug"></i> Focos do Mosquito</button>
+            <button class="nav-btn" data-panel="areas"><i class="fas fa-exclamation-triangle"></i> Áreas de Risco</button>
+            <button class="nav-btn" data-panel="camadas"><i class="fas fa-layer-group"></i> Camadas</button>
+            <button class="nav-btn" data-panel="analise"><i class="fas fa-chart-heat"></i> Análise</button>
+            <button class="nav-btn" data-panel="relatorios"><i class="fas fa-chart-bar"></i> Relatórios</button>
+        </nav>
+
+        <!-- Painéis -->
+        <div class="panel active" id="panel-map">
+            <div class="panel-header-didatico">
+                <h3><i class="fas fa-map"></i> Informações do Mapa</h3>
+                <p class="panel-subtitle">Navegue e explore o mapa interativo</p>
+            </div>
+            
+            <div class="guide-steps">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <strong>Zoom</strong>
+                        <p>Use a roda do mouse ou os botões + e - para aproximar/afastar</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <strong>Navegação</strong>
+                        <p>Clique e arraste para mover o mapa ou use as setas do teclado</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <strong>Marcadores</strong>
+                        <p>Clique nos marcadores coloridos para ver informações detalhadas</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box highlighted">
+                <div class="info-box-header">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Informações Atuais</strong>
+                </div>
+                <div class="info-box-content">
+                    <div class="info-item">
+                        <span class="info-label"><i class="fas fa-search-plus"></i> Nível de Zoom:</span>
+                        <span class="info-value" id="zoom-level">10</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label"><i class="fas fa-ruler"></i> Escala Aproximada:</span>
+                        <span class="info-value" id="map-scale">1 km</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-casos">
+            <div class="panel-header-didatico">
+                <h3><i class="fas fa-virus"></i> Casos de Dengue</h3>
+                <p class="panel-subtitle">Registre e acompanhe casos confirmados ou suspeitos</p>
+            </div>
+
+            <div class="info-box tip-box">
+                <div class="tip-icon">💡</div>
+                <div class="tip-content">
+                    <strong>Dica:</strong> Clique no mapa na localização do caso para adicionar rapidamente
+                </div>
+            </div>
+
+            <button class="btn-primary" id="btn-adicionar-caso">
+                <i class="fas fa-plus"></i> Adicionar Novo Caso
+            </button>
+
+            <div class="filters">
+                <label class="filter-label">
+                    <i class="fas fa-filter"></i> Filtrar por Status:
+                    <span class="tooltip-icon" title="Selecione o status dos casos que deseja visualizar">ⓘ</span>
+                </label>
+                <select id="filter-status-casos">
+                    <option value="todos">Todos os Casos</option>
+                    <option value="confirmado">✓ Confirmados</option>
+                    <option value="suspeito">⚠ Suspeitos</option>
+                    <option value="descartado">✗ Descartados</option>
+                </select>
+            </div>
+
+            <div class="list-header">
+                <strong>Casos Registrados</strong>
+                <span class="badge-count" id="count-casos">0</span>
+            </div>
+            <div class="list-container" id="lista-casos"></div>
+        </div>
+
+        <div class="panel" id="panel-focos">
+            <div class="panel-header-didatico">
+                <h3><i class="fas fa-bug"></i> Registro de Focos do Mosquito</h3>
+                <p class="panel-subtitle">Identifique e registre focos do Aedes aegypti</p>
+            </div>
+            
+            <div class="guide-steps compact">
+                <div class="step-item">
+                    <div class="step-icon"><i class="fas fa-hand-pointer"></i></div>
+                    <div class="step-content">
+                        <strong>1. Localize o foco</strong>
+                        <p>Clique no botão flutuante <i class="fas fa-bug" style="color: #667eea;"></i> ou diretamente no mapa</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-icon"><i class="fas fa-tag"></i></div>
+                    <div class="step-content">
+                        <strong>2. Escolha o tipo</strong>
+                        <p>Selecione entre os 13 tipos de depósitos disponíveis</p>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-icon"><i class="fas fa-save"></i></div>
+                    <div class="step-content">
+                        <strong>3. Complete o registro</strong>
+                        <p>Adicione descrição e confirme a localização</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box highlighted" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #2196f3;">
+                <div class="info-box-header">
+                    <i class="fas fa-lightbulb"></i>
+                    <strong>Tipos de Registro</strong>
+                </div>
+                <div class="info-box-content">
+                    <div class="registro-tipo">
+                        <span class="badge-tipo vistoria">👨‍⚕️ Vistoria</span>
+                        <span>Agente de Endemias durante inspeção</span>
+                    </div>
+                    <div class="registro-tipo">
+                        <span class="badge-tipo denuncia">👥 Denúncia Cidadã</span>
+                        <span>Público geral reportando focos encontrados</span>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn-primary" id="btn-abrir-selecao-foco" style="margin-bottom: 15px;">
+                <i class="fas fa-plus-circle"></i> Abrir Seletor de Tipo de Foco
+            </button>
+
+            <div class="filters" style="margin-top: 15px;">
+                <label class="filter-label">
+                    <i class="fas fa-filter"></i> Filtrar por Origem:
+                    <span class="tooltip-icon" title="Filtre os focos pela forma como foram registrados">ⓘ</span>
+                </label>
+                <select id="filter-origem-focos" style="margin-bottom: 10px;">
+                    <option value="todos">📍 Todas as Origens</option>
+                    <option value="vistoria">👨‍⚕️ Vistoria - Agente de Endemias</option>
+                    <option value="denuncia">👥 Denúncia Cidadã</option>
+                </select>
+                <label class="filter-label">
+                    <i class="fas fa-tags"></i> Filtrar por Tipo:
+                    <span class="tooltip-icon" title="Filtre pelos diferentes tipos de depósitos de água">ⓘ</span>
+                </label>
+                <select id="filter-tipo-focos">
+                    <option value="todos">🔍 Todos os Tipos</option>
+                    <optgroup label="1. Depósitos Fixos e Elevados">
+                        <option value="caixa-dagua-cisterna">💧 Caixa d'água/Cisternas</option>
+                        <option value="balde-tambor">🥤 Baldes/Tambores</option>
+                        <option value="piscina-desativada">🏊 Piscina Desativada</option>
+                    </optgroup>
+                    <optgroup label="2. Depósitos Móveis e Residuais">
+                        <option value="pneu">⭕ Pneus</option>
+                        <option value="garrafa-lata-plastico">🥫 Garrafas/Latas/Plásticos</option>
+                        <option value="lixo-ceu-aberto">🗑️ Lixo a Céu Aberto/Entulho</option>
+                        <option value="objetos-em-desuso">📦 Objetos em Desuso</option>
+                    </optgroup>
+                    <optgroup label="3. Depósitos Naturais ou Estruturais">
+                        <option value="agua-parada-estrutura">🏢 Água Parada em Estruturas</option>
+                        <option value="vaso-planta-prato">🌿 Vasos de Plantas/Pratos</option>
+                        <option value="bebedouro-animal">🐾 Bebedouros de Animais</option>
+                        <option value="ralo-caixa-passagem">🚰 Ralos e Caixas de Passagem</option>
+                    </optgroup>
+                    <option value="outro">❓ Outro</option>
+                </select>
+            </div>
+
+            <div class="list-header">
+                <strong>Focos Registrados</strong>
+                <span class="badge-count" id="count-focos">0</span>
+            </div>
+            <div class="list-container" id="lista-focos"></div>
+        </div>
+
+        <div class="panel" id="panel-areas">
+            <div class="panel-header-didatico">
+                <h3><i class="fas fa-exclamation-triangle"></i> Áreas de Risco</h3>
+                <p class="panel-subtitle">Identifique zonas com maior probabilidade de transmissão</p>
+            </div>
+
+            <div class="info-box warning-box">
+                <div class="warning-icon">⚠️</div>
+                <div class="warning-content">
+                    <strong>Áreas de Alto Risco:</strong> Regiões com concentração de casos ou múltiplos focos próximos
+                </div>
+            </div>
+
+            <button class="btn-primary" id="btn-adicionar-area">
+                <i class="fas fa-plus"></i> Marcar Nova Área de Risco
+            </button>
+
+            <div class="risk-levels-guide">
+                <div class="risk-item alto">
+                    <div class="risk-indicator"></div>
+                    <div class="risk-info">
+                        <strong>Alto Risco</strong>
+                        <p>3+ casos ou 5+ focos em área próxima</p>
+                    </div>
+                </div>
+                <div class="risk-item medio">
+                    <div class="risk-indicator"></div>
+                    <div class="risk-info">
+                        <strong>Médio Risco</strong>
+                        <p>1-2 casos ou 2-4 focos na região</p>
+                    </div>
+                </div>
+                <div class="risk-item baixo">
+                    <div class="risk-indicator"></div>
+                    <div class="risk-info">
+                        <strong>Baixo Risco</strong>
+                        <p>Casos isolados ou poucos focos</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filters">
+                <label class="filter-label">
+                    <i class="fas fa-filter"></i> Filtrar por Nível de Risco:
+                </label>
+                <select id="filter-nivel-areas">
+                    <option value="todos">📍 Todos os Níveis</option>
+                    <option value="alto">🔴 Alto Risco</option>
+                    <option value="medio">🟡 Médio Risco</option>
+                    <option value="baixo">🟢 Baixo Risco</option>
+                </select>
+            </div>
+
+            <div class="list-header">
+                <strong>Áreas Identificadas</strong>
+                <span class="badge-count" id="count-areas">0</span>
+            </div>
+            <div class="list-container" id="lista-areas"></div>
+        </div>
+
+        <div class="panel" id="panel-camadas">
+            <h3>Camadas do Mapa</h3>
+            <div class="layer-controls">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="layer-bairros" checked>
+                    <span>Bairros</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="layer-drenagem" checked>
+                    <span>Drenagem</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="layer-estruturas" checked>
+                    <span>Estruturas Urbanas</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="layer-ruas" checked>
+                    <span>Ruas</span>
+                </label>
+            </div>
+            <div class="opacity-control">
+                <label>Opacidade das Camadas:</label>
+                <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.7">
+                <span id="opacity-value">70%</span>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-analise">
+            <h3>Análise e Visualização</h3>
+            <div class="analysis-controls">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="toggle-heatmap">
+                    <span>Heatmap de Casos</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="toggle-clusters">
+                    <span>Clusters de Marcadores</span>
+                </label>
+                <div class="heatmap-options" id="heatmap-options" style="display: none; margin-top: 15px;">
+                    <label>Raio do Heatmap:</label>
+                    <input type="range" id="heatmap-radius" min="10" max="50" value="25">
+                    <span id="heatmap-radius-value">25</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-relatorios">
+            <h3>Relatórios e Estatísticas</h3>
+            <div class="report-stats">
+                <div class="stat-card">
+                    <h4>Casos por Status</h4>
+                    <div id="chart-casos-status"></div>
+                </div>
+                <div class="stat-card">
+                    <h4>Focos por Tipo</h4>
+                    <div id="chart-focos-tipo"></div>
+                </div>
+                <div class="stat-card">
+                    <h4>Áreas de Risco</h4>
+                    <div id="chart-areas-risco"></div>
+                </div>
+            </div>
+            <button class="btn-secondary" id="btn-exportar-dados">
+                <i class="fas fa-download"></i> Exportar Dados JSON
+            </button>
+            <button class="btn-secondary" id="btn-gerar-pdf">
+                <i class="fas fa-file-pdf"></i> Gerar Relatório PDF
+            </button>
+        </div>
+    </aside>
+
+    <!-- Botão para abrir sidebar -->
+    <button class="btn-toggle-sidebar" id="toggleSidebar">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Mapa -->
+    <div id="map"></div>
+
+    <!-- Botão Flutuante para Registrar Foco -->
+    <button class="btn-floating-foco" id="btn-floating-foco" title="Registrar Foco do Mosquito">
+        <i class="fas fa-bug"></i>
+        <span>Registrar Foco</span>
+    </button>
+
+    <!-- Modal Compacto para Seleção de Tipo de Foco -->
+    <div class="modal" id="modal-selecionar-foco">
+        <div class="modal-content modal-foco-selecao">
+            <div class="modal-header">
+                <h3><i class="fas fa-bug"></i> Selecionar Tipo de Foco</h3>
+                <button class="btn-close" onclick="fecharModalFoco()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-foco-body">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #333;">Tipo de Registro:</label>
+                    <select id="selecao-origem-foco-modal" style="width: 100%; padding: 10px; border: 2px solid #667eea; border-radius: 6px; font-size: 1rem;">
+                        <option value="vistoria">👨‍⚕️ Vistoria - Agente de Endemias</option>
+                        <option value="denuncia">👥 Denúncia Cidadã - Público Geral</option>
+                    </select>
+                </div>
+
+                <div style="max-height: 60vh; overflow-y: auto; padding-right: 10px;">
+                    <h4 style="margin: 15px 0 10px 0; color: #667eea; font-size: 1rem;">1. Depósitos Fixos e Elevados</h4>
+                    <div class="tipo-foco-grid-compact">
+                        <div class="tipo-foco-card-compact" data-tipo="caixa-dagua-cisterna">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-water"></i></div>
+                            <div class="tipo-foco-name-compact">Caixa d'água/Cisternas</div>
+                        </div>
+                        <div class="tipo-foco-card-compact" data-tipo="balde-tambor">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-flask"></i></div>
+                            <div class="tipo-foco-name-compact">Baldes/Tambores</div>
+                        </div>
+                        <div class="tipo-foco-card-compact" data-tipo="piscina-desativada">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-swimming-pool"></i></div>
+                            <div class="tipo-foco-name-compact">Piscina Desativada</div>
+                        </div>
+                    </div>
+
+                    <h4 style="margin: 20px 0 10px 0; color: #667eea; font-size: 1rem;">2. Depósitos Móveis e Residuais</h4>
+                    <div class="tipo-foco-grid-compact">
+                        <div class="tipo-foco-card-compact" data-tipo="pneu">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-circle"></i></div>
+                            <div class="tipo-foco-name-compact">Pneus</div>
+                        </div>
+                        <div class="tipo-foco-card-compact" data-tipo="garrafa-lata-plastico">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-wine-bottle"></i></div>
+                            <div class="tipo-foco-name-compact">Garrafas/Latas/Plásticos</div>
+                        </div>
+                        <div class="tipo-foco-card-compact" data-tipo="lixo-ceu-aberto">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-trash-alt"></i></div>
+                            <div class="tipo-foco-name-compact">Lixo a Céu Aberto/Entulho</div>
+                        </div>
+                        <div class="tipo-foco-card-compact" data-tipo="objetos-em-desuso">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-cube"></i></div>
+                            <div class="tipo-foco-name-compact">Objetos em Desuso</div>
+                        </div>
+                    </div>
+
+                    <h4 style="margin: 20px 0 10px 0; color: #667eea; font-size: 1rem;">3. Depósitos Naturais ou Estruturais</h4>
+                    <div class="tipo-foco-grid-compact">
+                        <div class="tipo-foco-card-compact" data-tipo="agua-parada-estrutura">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-building"></i></div>
+                            <div class="tipo-foco-name-compact">Água Parada em Estruturas</div>
+                        </div>
+                        <div class="tipo-foco-card-compact" data-tipo="vaso-planta-prato">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-seedling"></i></div>
+                            <div class="tipo-foco-name-compact">Vasos de Plantas/Pratos</div>
+                        </div>
+                        <div class="tipo-foco-card-compact" data-tipo="bebedouro-animal">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-paw"></i></div>
+                            <div class="tipo-foco-name-compact">Bebedouros de Animais</div>
+                        </div>
+                        <div class="tipo-foco-card-compact" data-tipo="ralo-caixa-passagem">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-grip-lines-vertical"></i></div>
+                            <div class="tipo-foco-name-compact">Ralos e Caixas de Passagem</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 15px;">
+                        <div class="tipo-foco-card-compact" data-tipo="outro" style="width: 100%;">
+                            <div class="tipo-foco-icon-compact"><i class="fas fa-question-circle"></i></div>
+                            <div class="tipo-foco-name-compact">Outro</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Login -->
+    <div class="modal" id="modal-login" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-sign-in-alt"></i> Login</h3>
+            </div>
+            <form id="form-login">
+                <div class="form-group">
+                    <label for="login-email">Email:</label>
+                    <input type="email" id="login-email" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="login-senha">Senha:</label>
+                    <input type="password" id="login-senha" required autocomplete="current-password">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Entrar</button>
+                </div>
+                <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; font-size: 0.85rem; color: #666;">
+                    <strong>Usuários padrão:</strong><br>
+                    Admin: admin@dengue.local / admin123<br>
+                    Operador: operador@dengue.local / operador123
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Notificações -->
+    <div class="modal" id="modal-notificacoes">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-bell"></i> Notificações</h3>
+                <button class="btn-close" onclick="fecharNotificacoes()"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="padding: 20px;">
+                <button class="btn-secondary" onclick="marcarTodasNotificacoesLidas()" style="width: 100%; margin-bottom: 15px;">
+                    <i class="fas fa-check-double"></i> Marcar Todas como Lidas
+                </button>
+                <div id="lista-notificacoes" style="max-height: 400px; overflow-y: auto;">
+                    <p style="text-align: center; color: #999;">Carregando...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Adicionar Caso/Foco/Área -->
+    <div class="modal" id="modal-form">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Adicionar Item</h3>
+                <button class="btn-close" id="closeModal"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="form-item">
+                <input type="hidden" id="form-type">
+                <input type="hidden" id="form-id">
+                
+                <!-- Seção de Localização -->
+                <div class="form-group" id="form-group-localizacao">
+                    <label style="margin-bottom: 10px; display: block; font-weight: 600;">
+                        <i class="fas fa-map-marker-alt"></i> Localização:
+                    </label>
+                    
+                    <!-- Tabs de Localização -->
+                    <div class="localizacao-tabs">
+                        <button type="button" class="localizacao-tab-btn active" data-loc-tab="mapa" id="tab-loc-mapa">
+                            <i class="fas fa-map"></i> Marcar no Mapa
+                        </button>
+                        <button type="button" class="localizacao-tab-btn" data-loc-tab="endereco" id="tab-loc-endereco">
+                            <i class="fas fa-home"></i> Por Endereço
+                        </button>
+                    </div>
+                    
+                    <!-- Aba: Marcar no Mapa -->
+                    <div class="localizacao-tab-content active" id="content-loc-mapa">
+                        <div class="info-box" style="background: #e3f2fd; padding: 10px; margin-bottom: 10px; border-left: 3px solid #2196f3;">
+                            <p style="margin: 0; font-size: 0.85rem;">
+                                <i class="fas fa-info-circle"></i> Clique no mapa para definir a localização ou ajuste as coordenadas abaixo.
+                            </p>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label for="form-latitude" style="font-size: 0.85rem;">Latitude:</label>
+                                <input type="number" id="form-latitude" step="any" required>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label for="form-longitude" style="font-size: 0.85rem;">Longitude:</label>
+                                <input type="number" id="form-longitude" step="any" required>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary" id="btn-localizar-no-mapa" style="margin-top: 10px; padding: 8px; font-size: 0.9rem;">
+                            <i class="fas fa-crosshairs"></i> Usar Posição Atual do Mapa
+                        </button>
+                    </div>
+                    
+                    <!-- Aba: Por Endereço -->
+                    <div class="localizacao-tab-content" id="content-loc-endereco" style="display: none;">
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label for="form-bairro">
+                                <i class="fas fa-map"></i> Bairro:
+                            </label>
+                            <select id="form-bairro" style="width: 100%; padding: 10px;">
+                                <option value="">Selecione o bairro...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label for="form-rua">
+                                <i class="fas fa-road"></i> Rua:
+                            </label>
+                            <input type="text" id="form-rua" list="lista-ruas" placeholder="Digite o nome da rua ou selecione no mapa..." style="width: 100%; padding: 10px;">
+                            <datalist id="lista-ruas"></datalist>
+                            <small style="color: #666; font-size: 0.8rem; display: block; margin-top: 5px;">
+                                <i class="fas fa-lightbulb"></i> Dica: Você também pode clicar em uma rua no mapa para selecioná-la
+                            </small>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label for="form-numero">
+                                <i class="fas fa-hashtag"></i> Número:
+                            </label>
+                            <input type="text" id="form-numero" placeholder="Ex: 123" style="width: 100%; padding: 10px;">
+                        </div>
+                        
+                        <button type="button" class="btn-secondary" id="btn-buscar-endereco" style="width: 100%; padding: 10px; margin-top: 10px;">
+                            <i class="fas fa-search-location"></i> Buscar Localização no Mapa
+                        </button>
+                        
+                        <div id="endereco-resultado" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px; display: none;">
+                            <strong><i class="fas fa-check-circle" style="color: #28a745;"></i> Coordenadas encontradas:</strong>
+                            <div style="margin-top: 5px; font-size: 0.85rem;">
+                                <span id="endereco-lat">-</span>, <span id="endereco-lng">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="form-group-descricao">
+                    <label for="form-descricao">Descrição:</label>
+                    <textarea id="form-descricao" rows="3"></textarea>
+                </div>
+                
+                <div class="form-group" id="form-group-status">
+                    <label for="form-status">Status:</label>
+                    <select id="form-status">
+                        <option value="confirmado">Confirmado</option>
+                        <option value="suspeito">Suspeito</option>
+                        <option value="descartado">Descartado</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="form-group-origem">
+                    <label for="form-origem">Tipo de Registro:</label>
+                    <select id="form-origem">
+                        <option value="vistoria">Vistoria - Agente de Endemias</option>
+                        <option value="denuncia">Denúncia Cidadã - Público Geral</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="form-group-tipo">
+                    <label for="form-tipo">Selecione o Tipo de Foco:</label>
+                    
+                    <!-- Tabs para categorias -->
+                    <div class="tipo-foco-tabs">
+                        <button type="button" class="tab-btn active" data-tab="fixos">1. Fixos e Elevados</button>
+                        <button type="button" class="tab-btn" data-tab="moveis">2. Móveis e Residuais</button>
+                        <button type="button" class="tab-btn" data-tab="naturais">3. Naturais/Estruturais</button>
+                        <button type="button" class="tab-btn" data-tab="outro">Outro</button>
+                    </div>
+                    
+                    <!-- Container dos cards de tipos -->
+                    <div class="tipo-foco-container">
+                        <!-- Tab 1: Fixos e Elevados -->
+                        <div class="tipo-foco-tab-content active" id="tab-fixos">
+                            <div class="tipo-foco-grid">
+                                <div class="tipo-foco-card" data-tipo="caixa-dagua-cisterna" data-descricao="Aberta, destampada ou com vedação incorreta">
+                                    <i class="fas fa-tint"></i>
+                                    <span>Caixa d'água/Cisternas</span>
+                                </div>
+                                <div class="tipo-foco-card" data-tipo="balde-tambor" data-descricao="Recipientes usados para armazenamento de água, destampados ou mal vedados">
+                                    <i class="fas fa-flask"></i>
+                                    <span>Baldes/Tambores</span>
+                                </div>
+                                <div class="tipo-foco-card" data-tipo="piscina-desativada" data-descricao="Piscina sem tratamento ou em desuso, com água acumulada">
+                                    <i class="fas fa-swimming-pool"></i>
+                                    <span>Piscina Desativada</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tab 2: Móveis e Residuais -->
+                        <div class="tipo-foco-tab-content" id="tab-moveis">
+                            <div class="tipo-foco-grid">
+                                <div class="tipo-foco-card" data-tipo="pneu" data-descricao="Acúmulo de água em pneus velhos e descartados">
+                                    <i class="fas fa-circle"></i>
+                                    <span>Pneus</span>
+                                </div>
+                                <div class="tipo-foco-card" data-tipo="garrafa-lata-plastico" data-descricao="Recipientes plásticos ou de vidro jogados ou armazenados de forma inadequada">
+                                    <i class="fas fa-wine-bottle"></i>
+                                    <span>Garrafas/Latas/Plásticos</span>
+                                </div>
+                                <div class="tipo-foco-card" data-tipo="lixo-ceu-aberto" data-descricao="Acúmulo de lixo ou entulho que permite o acúmulo de água">
+                                    <i class="fas fa-trash-alt"></i>
+                                    <span>Lixo a Céu Aberto/Entulho</span>
+                                </div>
+                                <div class="tipo-foco-card" data-tipo="objetos-em-desuso" data-descricao="Brinquedos velhos, eletrodomésticos, sucatas que acumulam água">
+                                    <i class="fas fa-box"></i>
+                                    <span>Objetos em Desuso</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tab 3: Naturais/Estruturais -->
+                        <div class="tipo-foco-tab-content" id="tab-naturais">
+                            <div class="tipo-foco-grid">
+                                <div class="tipo-foco-card" data-tipo="agua-parada-estrutura" data-descricao="Calhas entupidas, lajes planas com acúmulo de água, ou partes da construção que não drenam corretamente">
+                                    <i class="fas fa-building"></i>
+                                    <span>Água Parada em Estruturas</span>
+                                </div>
+                                <div class="tipo-foco-card" data-tipo="vaso-planta-prato" data-descricao="Acúmulo de água nos pratos ou dentro dos vasos (incluindo bromélias ou plantas que retêm água)">
+                                    <i class="fas fa-leaf"></i>
+                                    <span>Vasos de Plantas/Pratos</span>
+                                </div>
+                                <div class="tipo-foco-card" data-tipo="bebedouro-animal" data-descricao="Recipientes de água de animais domésticos com troca infrequente">
+                                    <i class="fas fa-paw"></i>
+                                    <span>Bebedouros de Animais</span>
+                                </div>
+                                <div class="tipo-foco-card" data-tipo="ralo-caixa-passagem" data-descricao="Ralos externos ou caixas de inspeção sem vedação ou com água acumulada">
+                                    <i class="fas fa-grip-lines-vertical"></i>
+                                    <span>Ralos e Caixas de Passagem</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tab 4: Outro -->
+                        <div class="tipo-foco-tab-content" id="tab-outro">
+                            <div class="tipo-foco-grid">
+                                <div class="tipo-foco-card" data-tipo="outro" data-descricao="Outros tipos de depósitos não categorizados. Especifique na descrição.">
+                                    <i class="fas fa-question-circle"></i>
+                                    <span>Outro (especificar na descrição)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Campo hidden para manter compatibilidade -->
+                    <input type="hidden" id="form-tipo" value="">
+                    
+                    <!-- Box de descrição -->
+                    <div id="tipo-descricao-box" class="tipo-descricao-box" style="display: none; margin-top: 15px; padding: 12px; background: #f8f9fa; border-left: 4px solid #667eea; border-radius: 4px;">
+                        <strong>Descrição:</strong> <span id="tipo-descricao-text"></span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="form-group-nivel">
+                    <label for="form-nivel">Nível de Risco:</label>
+                    <select id="form-nivel">
+                        <option value="alto">Alto Risco</option>
+                        <option value="medio">Médio Risco</option>
+                        <option value="baixo">Baixo Risco</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="form-data">Data:</label>
+                    <input type="datetime-local" id="form-data" required>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Salvar</button>
+                    <button type="button" class="btn-secondary" id="cancel-form">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Leaflet Awesome Markers -->
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.awesome-markers@2.0.5/dist/leaflet.awesome-markers.min.js"></script>
+    
+    <!-- Leaflet MarkerCluster -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    
+    <!-- Leaflet Heatmap -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    
+    <!-- jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    
+    <!-- API Client -->
+    <script type="module" src="api.js"></script>
+    
+    <!-- Aplicação Principal -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

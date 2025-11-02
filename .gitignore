@@ -1,0 +1,40 @@
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Arquivos temporários
+*.tmp
+*.temp
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Arquivos exportados
+dengue-dados-*.json
+
+# Node modules (se usar no futuro)
+node_modules/
+package-lock.json
+
+# Arquivos de backup
+*.bak
+*~
+
+# Banco de dados
+server/database.sqlite
+server/database.sqlite-journal
+
+# Variáveis de ambiente
+.env
+.env.local
+
+# Arquivos do servidor
+server/node_modules/
+server/package-lock.json
