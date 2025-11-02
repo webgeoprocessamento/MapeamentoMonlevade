@@ -785,6 +785,35 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     
+    <!-- Script de Diagnóstico e Garantia de Carregamento -->
+    <script>
+        // Log de diagnóstico
+        console.log('📋 Scripts iniciando...');
+        console.log('📋 Leaflet disponível?', typeof L !== 'undefined' ? '✅ Sim' : '❌ Não');
+        console.log('📋 Elemento #map existe?', document.getElementById('map') ? '✅ Sim' : '❌ Não');
+        
+        // Função para garantir que Leaflet está no window
+        window.addEventListener('load', function() {
+            console.log('🪟 window.onload - Verificando Leaflet...');
+            if (typeof L !== 'undefined' && !window.L) {
+                window.L = L;
+                console.log('✅ Leaflet copiado para window.L');
+            }
+            
+            // Verificar se o elemento do mapa tem dimensões
+            const mapElement = document.getElementById('map');
+            if (mapElement) {
+                const style = window.getComputedStyle(mapElement);
+                console.log('📐 Dimensões do #map:', {
+                    width: style.width,
+                    height: style.height,
+                    display: style.display,
+                    visibility: style.visibility
+                });
+            }
+        });
+    </script>
+    
     <!-- API Client -->
     <script type="module" src="api.js"></script>
     
