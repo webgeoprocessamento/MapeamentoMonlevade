@@ -682,9 +682,11 @@ async function loadDadosFromAPI() {
 // Renderizar dados no mapa
 function renderMapData() {
     if (!map || typeof L === 'undefined') {
-        console.error('Mapa ou Leaflet não está inicializado!');
+        console.error('❌ Mapa ou Leaflet não está inicializado!');
         return;
     }
+    
+    console.log(`🗺️ Renderizando ${dadosFocos.length} focos e ${dadosAreas.length} áreas no mapa...`);
     
     // Inicializar camadas se ainda não foram inicializadas
     if (!marcadoresFocos) {
@@ -694,7 +696,7 @@ function renderMapData() {
         marcadoresAreas = L.layerGroup();
     }
     
-    // Limpar camadas
+    // Limpar camadas existentes
     try {
         if (marcadoresFocos && map.hasLayer(marcadoresFocos)) {
             map.removeLayer(marcadoresFocos);
@@ -702,24 +704,33 @@ function renderMapData() {
         if (marcadoresAreas && map.hasLayer(marcadoresAreas)) {
             map.removeLayer(marcadoresAreas);
         }
-        if (clusterFocos && map.hasLayer(clusterFocos)) {
-            map.removeLayer(clusterFocos);
+        if (clusterFocos) {
+            if (map.hasLayer(clusterFocos)) {
+                map.removeLayer(clusterFocos);
+            }
+            clusterFocos.clearLayers();
         }
         if (heatmapLayer && map.hasLayer(heatmapLayer)) {
             map.removeLayer(heatmapLayer);
+            heatmapLayer = null;
         }
     } catch (e) {
-        console.warn('Erro ao limpar camadas:', e);
+        console.warn('⚠️ Erro ao limpar camadas:', e);
     }
 
     // Recriar camadas
     marcadoresFocos = L.layerGroup();
     marcadoresAreas = L.layerGroup();
 
-    // Criar clusters
-    clusterFocos = L.markerClusterGroup();
+    // Criar clusters (recriar se necessário)
+    if (!clusterFocos || clusterFocos._leaflet_id === undefined) {
+        clusterFocos = L.markerClusterGroup();
+    } else {
+        clusterFocos.clearLayers();
+    }
 
-    // Adicionar focos
+    // Adicionar focos ao mapa
+    let focosAdicionados = 0;
     dadosFocos.forEach(foco => {
         const tipoIcons = {
             // Depósitos Fixos e Elevados
@@ -754,9 +765,13 @@ function renderMapData() {
         
         clusterFocos.addLayer(marker);
         marcadoresFocos.addLayer(marker);
+        focosAdicionados++;
     });
+    
+    console.log(`✅ ${focosAdicionados} focos adicionados ao mapa`);
 
     // Adicionar áreas
+    let areasAdicionadas = 0;
     dadosAreas.forEach(area => {
         const nivelColors = {
             'alto': 'red',
@@ -776,14 +791,27 @@ function renderMapData() {
         .on('click', () => map.setView([area.latitude, area.longitude], 15));
         
         marcadoresAreas.addLayer(circle);
+        areasAdicionadas++;
     });
+    
+    console.log(`✅ ${areasAdicionadas} áreas adicionadas ao mapa`);
 
-    // Adicionar ao mapa
+    // Adicionar camadas ao mapa
     marcadoresFocos.addTo(map);
     marcadoresAreas.addTo(map);
     
+    // Adicionar clusters se o toggle estiver ativo
+    const clusterToggle = document.getElementById('toggle-clusters');
+    if (clusterToggle && clusterToggle.checked && clusterFocos) {
+        clusterFocos.addTo(map);
+        marcadoresFocos.removeFrom(map);
+    }
+    
+    // Atualizar heatmap e clusters
     updateHeatmap();
     updateClusters();
+    
+    console.log('✅ Mapa renderizado com sucesso!');
 }
 
 // Inicializar Heatmap
@@ -1422,9 +1450,18 @@ async function handleFormSubmit(e) {
             }
         }
 
+        // Recarregar dados da API
         await loadDadosFromAPI();
+        
+        // Renderizar dados no mapa (isso adiciona os novos focos ao mapa)
+        renderMapData();
+        
+        // Atualizar estatísticas e contadores
         updateStats();
-        atualizarContadoresModalFoco(); // Atualizar contadores após salvar
+        atualizarContadoresModalFoco();
+        
+        // Mensagem de sucesso
+        console.log('✅ Foco salvo com sucesso! Total:', dadosFocos.length);
         
         // Remover marcador arrastável ao fechar
         if (window.draggableMarker) {
@@ -1434,7 +1471,7 @@ async function handleFormSubmit(e) {
         
         document.getElementById('modal-form').classList.remove('active');
         
-        const activePanel = document.querySelector('.panel.active').id;
+        const activePanel = document.querySelector('.panel.active')?.id;
         if (activePanel === 'panel-focos') {
             const origem = document.getElementById('filter-origem-focos')?.value || 'todos';
             const tipo = document.getElementById('filter-tipo-focos')?.value || 'todos';
@@ -1442,6 +1479,7 @@ async function handleFormSubmit(e) {
         }
         else if (activePanel === 'panel-areas') renderAreas();
     } catch (error) {
+        console.error('Erro ao salvar foco:', error);
         alert('Erro ao salvar: ' + error.message);
     }
 }
@@ -1556,11 +1594,17 @@ window.deletarItem = async function(type, id) {
             await areas.delete(id);
         }
 
+        // Recarregar dados da API
         await loadDadosFromAPI();
-        updateStats();
-        atualizarContadoresModalFoco(); // Atualizar contadores após excluir
         
-        const activePanel = document.querySelector('.panel.active').id;
+        // Renderizar dados no mapa (remove focos excluídos)
+        renderMapData();
+        
+        // Atualizar estatísticas e contadores
+        updateStats();
+        atualizarContadoresModalFoco();
+        
+        const activePanel = document.querySelector('.panel.active')?.id;
         if (activePanel === 'panel-focos') {
             const origem = document.getElementById('filter-origem-focos')?.value || 'todos';
             const tipo = document.getElementById('filter-tipo-focos')?.value || 'todos';
@@ -1568,6 +1612,7 @@ window.deletarItem = async function(type, id) {
         }
         else if (activePanel === 'panel-areas') renderAreas();
     } catch (error) {
+        console.error('Erro ao excluir:', error);
         alert('Erro ao excluir: ' + error.message);
     }
 };
