@@ -163,7 +163,10 @@ function abrirModalSelecaoFoco(clickLatLng = null) {
                     icon: 'map-marker-alt',
                     markerColor: 'red',
                     prefix: 'fas',
-                    iconColor: 'white'
+                    iconColor: 'white',
+                    iconSize: [18, 27], // Marcador menor
+                    iconAnchor: [9, 27],
+                    popupAnchor: [0, -27]
                 }),
                 zIndexOffset: 999,
                 opacity: 0.8
@@ -626,7 +629,10 @@ function loadGeoJsonLayers() {
                                         icon: L.AwesomeMarkers.icon({
                                             icon: 'map-marker-alt',
                                             markerColor: 'blue',
-                                            prefix: 'fas'
+                                            prefix: 'fas',
+                                            iconSize: [18, 27],
+                                            iconAnchor: [9, 27],
+                                            popupAnchor: [0, -27]
                                         })
                                     }).addTo(map);
                                 }
@@ -732,30 +738,54 @@ function renderMapData() {
         clusterFocos.clearLayers();
     }
 
+    // Mapeamento de cores por tipo de foco
+    const tipoCores = {
+        // Depósitos Fixos e Elevados
+        'caixa-dagua-cisterna': 'blue',
+        'balde-tambor': 'cyan',
+        'piscina-desativada': 'purple',
+        // Depósitos Móveis e Residuais
+        'pneu': 'darkred',
+        'garrafa-lata-plastico': 'green',
+        'lixo-ceu-aberto': 'red',
+        'objetos-em-desuso': 'darkgreen',
+        // Depósitos Naturais ou Estruturais
+        'agua-parada-estrutura': 'orange',
+        'vaso-planta-prato': 'lightgreen',
+        'bebedouro-animal': 'pink',
+        'ralo-caixa-passagem': 'gray',
+        'outro': 'cadetblue'
+    };
+    
+    // Mapeamento de ícones por tipo de foco
+    const tipoIcons = {
+        // Depósitos Fixos e Elevados
+        'caixa-dagua-cisterna': 'tint',
+        'balde-tambor': 'flask',
+        'piscina-desativada': 'water',
+        // Depósitos Móveis e Residuais
+        'pneu': 'circle',
+        'garrafa-lata-plastico': 'recycle',
+        'lixo-ceu-aberto': 'trash',
+        'objetos-em-desuso': 'box',
+        // Depósitos Naturais ou Estruturais
+        'agua-parada-estrutura': 'building',
+        'vaso-planta-prato': 'leaf',
+        'bebedouro-animal': 'paw',
+        'ralo-caixa-passagem': 'grip-lines-vertical',
+        'outro': 'exclamation-triangle'
+    };
+
     // Adicionar focos ao mapa
     let focosAdicionados = 0;
     dadosFocos.forEach(foco => {
-        const tipoIcons = {
-            // Depósitos Fixos e Elevados
-            'caixa-dagua-cisterna': 'tint',
-            'balde-tambor': 'flask',
-            'piscina-desativada': 'water',
-            // Depósitos Móveis e Residuais
-            'pneu': 'circle',
-            'garrafa-lata-plastico': 'recycle',
-            'lixo-ceu-aberto': 'trash',
-            'objetos-em-desuso': 'box',
-            // Depósitos Naturais ou Estruturais
-            'agua-parada-estrutura': 'building',
-            'vaso-planta-prato': 'leaf',
-            'bebedouro-animal': 'paw',
-            'ralo-caixa-passagem': 'grip-lines-vertical',
-            'outro': 'exclamation-triangle'
-        };
         const icon = L.AwesomeMarkers.icon({
             icon: tipoIcons[foco.tipo] || 'bug',
-            markerColor: 'yellow',
-            prefix: 'fas'
+            markerColor: tipoCores[foco.tipo] || 'yellow',
+            prefix: 'fas',
+            iconSize: [18, 27], // Marcadores menores
+            iconAnchor: [9, 27],
+            popupAnchor: [0, -27]
         });
         const origemLabel = foco.origem === 'vistoria' ? '👨‍⚕️ Vistoria' : '👥 Denúncia Cidadã';
         const marker = L.marker([foco.latitude, foco.longitude], { icon })
@@ -1231,8 +1261,23 @@ function openForm(type, item, latlng, prefillData = null) {
             statusMarcador.style.display = 'block';
         }
         
-        // Criar marcador arrastável
-        const tipoIcons = {
+        // Mapeamento de cores e ícones para marcador arrastável
+        const tipoCoresDraggable = {
+            'caixa-dagua-cisterna': 'blue',
+            'balde-tambor': 'cyan',
+            'piscina-desativada': 'purple',
+            'pneu': 'darkred',
+            'garrafa-lata-plastico': 'green',
+            'lixo-ceu-aberto': 'red',
+            'objetos-em-desuso': 'darkgreen',
+            'agua-parada-estrutura': 'orange',
+            'vaso-planta-prato': 'lightgreen',
+            'bebedouro-animal': 'pink',
+            'ralo-caixa-passagem': 'gray',
+            'outro': 'cadetblue'
+        };
+        
+        const tipoIconsDraggable = {
             'caixa-dagua-cisterna': 'tint',
             'balde-tambor': 'flask',
             'piscina-desativada': 'water',
@@ -1246,8 +1291,10 @@ function openForm(type, item, latlng, prefillData = null) {
             'ralo-caixa-passagem': 'grip-lines-vertical',
             'outro': 'exclamation-triangle'
         };
+        
         const selectedTipo = prefillData?.tipo || item?.tipo || 'outro';
-        const iconName = tipoIcons[selectedTipo] || 'bug';
+        const iconName = tipoIconsDraggable[selectedTipo] || 'bug';
+        const markerColor = tipoCoresDraggable[selectedTipo] || 'red';
         
         // Remover marcador antigo se existir
         if (window.draggableMarker) {
@@ -1258,9 +1305,12 @@ function openForm(type, item, latlng, prefillData = null) {
         window.draggableMarker = L.marker([latlng.lat, latlng.lng], {
             icon: L.AwesomeMarkers.icon({
                 icon: iconName,
-                markerColor: 'red',
+                markerColor: markerColor,
                 prefix: 'fas',
-                iconColor: 'white'
+                iconColor: 'white',
+                iconSize: [18, 27], // Marcador menor
+                iconAnchor: [9, 27],
+                popupAnchor: [0, -27]
             }),
             draggable: true,
             zIndexOffset: 1000
@@ -1951,7 +2001,10 @@ async function buscarLocalizacaoPorEndereco() {
                 icon: L.AwesomeMarkers.icon({
                     icon: 'map-marker-alt',
                     markerColor: 'green',
-                    prefix: 'fas'
+                    prefix: 'fas',
+                    iconSize: [18, 27],
+                    iconAnchor: [9, 27],
+                    popupAnchor: [0, -27]
                 })
             }).addTo(map);
             
@@ -1994,7 +2047,10 @@ async function buscarLocalizacaoPorEndereco() {
                             icon: L.AwesomeMarkers.icon({
                                 icon: 'map-marker-alt',
                                 markerColor: 'orange',
-                                prefix: 'fas'
+                                prefix: 'fas',
+                                iconSize: [18, 27],
+                                iconAnchor: [9, 27],
+                                popupAnchor: [0, -27]
                             })
                         }).addTo(map);
                     } else {
