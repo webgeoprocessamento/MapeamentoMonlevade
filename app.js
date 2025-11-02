@@ -62,12 +62,14 @@ window.logout = function() {
 // Abrir modal de seleção de foco
 function abrirModalSelecaoFoco(clickLatLng = null) {
     const modal = document.getElementById('modal-selecionar-foco');
-    if (modal) {
-        // Atualizar contadores antes de abrir
-        atualizarContadoresModalFoco();
-        
-        // Guardar posição do clique se fornecida
-        if (clickLatLng) {
+    if (!modal) return;
+    
+    // Atualizar contadores antes de abrir
+    atualizarContadoresModalFoco();
+    
+    // Guardar posição do clique se fornecida
+    if (clickLatLng && map) {
+        try {
             map._clickLatLng = clickLatLng;
             // Adicionar marcador temporário no mapa para indicar onde será marcado
             if (window.tempMarkerFocus) {
@@ -86,9 +88,11 @@ function abrirModalSelecaoFoco(clickLatLng = null) {
             .bindPopup('<div style="text-align: center;"><strong>📍 Nova Marcação</strong><br><small>Selecione o tipo de foco para continuar</small></div>')
             .addTo(map)
             .openPopup();
+        } catch (error) {
+            console.error('Erro ao adicionar marcador temporário:', error);
         }
-        modal.classList.add('active');
     }
+    modal.classList.add('active');
 }
 
 // Atualizar contadores de focos no modal de seleção
@@ -151,8 +155,12 @@ window.fecharModalFoco = function() {
         // Limpar seleções
         document.querySelectorAll('.tipo-foco-card-compact').forEach(c => c.classList.remove('selected'));
         // Remover marcador temporário se não foi usado
-        if (window.tempMarkerFocus && !window.draggableMarker) {
-            map.removeLayer(window.tempMarkerFocus);
+        if (window.tempMarkerFocus && !window.draggableMarker && map) {
+            try {
+                map.removeLayer(window.tempMarkerFocus);
+            } catch (e) {
+                console.error('Erro ao remover marcador temporário:', e);
+            }
             window.tempMarkerFocus = null;
         }
     }
@@ -168,9 +176,13 @@ async function initApp() {
         if (userName) userName.textContent = currentUser.nome || 'Usuário Teste';
     }
 
-    // Conectar Socket.IO
-    socket = io(API_BASE_URL);
-    socket.on('nova_area_risco', handleNovaAreaRisco);
+    // Conectar Socket.IO (com tratamento de erro)
+    try {
+        socket = io(API_BASE_URL);
+        socket.on('nova_area_risco', handleNovaAreaRisco);
+    } catch (error) {
+        console.warn('Erro ao conectar Socket.IO:', error);
+    }
 
     initMap();
     initSidebar();
@@ -235,11 +247,11 @@ function setupFormButtonDelegation() {
                                 if (lngInput) lngInput.value = lng.toFixed(6);
                                 
                                 // Se houver marcador arrastável, mover
-                                if (window.draggableMarker) {
+                                if (window.draggableMarker && map) {
                                     window.draggableMarker.setLatLng([lat, lng]);
                                     map.setView([lat, lng], 17);
                                     updateCoordenadasFromMarker();
-                                } else {
+                                } else if (map) {
                                     map.setView([lat, lng], 17);
                                 }
                                 
@@ -313,25 +325,45 @@ function setupFormButtonDelegation() {
 
 // Inicializar Mapa
 function initMap() {
-    map = L.map('map', {
-        center: [-19.81, -43.17],
-        zoom: 13
-    });
+    try {
+        // Verificar se Leaflet está disponível
+        if (typeof L === 'undefined') {
+            console.error('Leaflet não está carregado! Verifique se o script está incluído.');
+            return;
+        }
+        
+        // Verificar se o elemento do mapa existe
+        const mapElement = document.getElementById('map');
+        if (!mapElement) {
+            console.error('Elemento #map não encontrado!');
+            return;
+        }
+        
+        map = L.map('map', {
+            center: [-19.81, -43.17],
+            zoom: 13
+        });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
 
-    L.control.scale({
-        metric: true,
-        imperial: false
-    }).addTo(map);
+        L.control.scale({
+            metric: true,
+            imperial: false
+        }).addTo(map);
 
-    map.on('zoomend', updateZoomInfo);
-    map.on('moveend', updateScale);
-    updateZoomInfo();
-    updateScale();
+        map.on('zoomend', updateZoomInfo);
+        map.on('moveend', updateScale);
+        updateZoomInfo();
+        updateScale();
+        
+        console.log('Mapa inicializado com sucesso!');
+    } catch (error) {
+        console.error('Erro ao inicializar o mapa:', error);
+        alert('Erro ao carregar o mapa. Verifique o console para mais detalhes.');
+    }
 }
 
 // Carregar camadas GeoJSON
