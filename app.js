@@ -975,51 +975,77 @@ function initForms() {
         const modalSelecao = document.getElementById('modal-selecionar-foco');
         if (!modalSelecao || !modalSelecao.classList.contains('active')) return;
         
+        // Não processar se for o botão OK
+        if (e.target.closest('#btn-confirmar-selecao-foco')) return;
+        
         e.preventDefault();
         e.stopPropagation();
-        
-        const tipo = card.getAttribute('data-tipo');
-        const origemSelect = document.getElementById('selecao-origem-foco-modal');
-        const origem = origemSelect ? origemSelect.value : 'vistoria';
         
         // Remover seleção anterior
         document.querySelectorAll('.tipo-foco-card-compact').forEach(c => c.classList.remove('selected'));
         
-        // Marcar card selecionado
+        // Marcar card selecionado (apenas visual, não abre formulário ainda)
         card.classList.add('selected');
-        
-        // Fechar modal de seleção
-        window.fecharModalFoco();
-        
-        // Usar posição do clique no mapa, rua selecionada, ou centro do mapa
-        let latlng = map._clickLatLng || (map._ruaSelecionada ? map._ruaSelecionada.latlng : null) || map.getCenter();
-        
-        // Remover marcador temporário se existir
-        if (window.tempMarkerFocus) {
-            map.removeLayer(window.tempMarkerFocus);
-            window.tempMarkerFocus = null;
+    });
+    
+    // Botão OK para confirmar seleção
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'btn-confirmar-selecao-foco' || e.target.closest('#btn-confirmar-selecao-foco')) {
+            const modalSelecao = document.getElementById('modal-selecionar-foco');
+            if (!modalSelecao || !modalSelecao.classList.contains('active')) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Verificar se há um card selecionado
+            const cardSelecionado = document.querySelector('.tipo-foco-card-compact.selected');
+            if (!cardSelecionado) {
+                alert('Por favor, selecione um tipo de foco primeiro.');
+                return;
+            }
+            
+            const tipo = cardSelecionado.getAttribute('data-tipo');
+            const origemSelect = document.getElementById('selecao-origem-foco-modal');
+            const origem = origemSelect ? origemSelect.value : 'vistoria';
+            
+            // Fechar modal de seleção
+            window.fecharModalFoco();
+            
+            // Usar posição do clique no mapa, rua selecionada, ou centro do mapa
+            let latlng = map._clickLatLng || (map._ruaSelecionada ? map._ruaSelecionada.latlng : null) || map.getCenter();
+            
+            // Remover marcador temporário se existir
+            if (window.tempMarkerFocus) {
+                map.removeLayer(window.tempMarkerFocus);
+                window.tempMarkerFocus = null;
+            }
+            
+            // Se foi selecionada uma rua, preparar dados de endereço
+            let formData = {
+                tipo: tipo,
+                origem: origem
+            };
+            
+            if (map._ruaSelecionada) {
+                formData.rua = map._ruaSelecionada.nome;
+                formData.clickLatLng = map._ruaSelecionada.clickLatLng;
+            }
+            
+            // Limpar dados temporários
+            delete map._clickLatLng;
+            delete map._ruaSelecionada;
+            
+            // Pequeno delay para garantir que o modal foi fechado
+            setTimeout(() => {
+                // Abrir formulário com tipo pré-selecionado
+                openForm('foco', null, latlng, formData);
+                
+                // Atualizar contadores após um pequeno delay (para garantir que os dados foram atualizados)
+                setTimeout(() => {
+                    atualizarContadoresModalFoco();
+                }, 500);
+            }, 100);
         }
-        
-        // Se foi selecionada uma rua, preparar dados de endereço
-        let formData = {
-            tipo: tipo,
-            origem: origem
-        };
-        
-        if (map._ruaSelecionada) {
-            formData.rua = map._ruaSelecionada.nome;
-            formData.clickLatLng = map._ruaSelecionada.clickLatLng;
-        }
-        
-        // Limpar dados temporários
-        delete map._clickLatLng;
-        delete map._ruaSelecionada;
-        
-        // Pequeno delay para garantir que o modal foi fechado
-        setTimeout(() => {
-            // Abrir formulário com tipo pré-selecionado
-            openForm('foco', null, latlng, formData);
-        }, 100);
     });
 
     document.getElementById('btn-adicionar-area').addEventListener('click', () => {
