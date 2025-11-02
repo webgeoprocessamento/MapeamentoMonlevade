@@ -61,18 +61,16 @@ function waitForLeaflet(maxAttempts = 50, interval = 100) {
         let attempts = 0;
         const checkLeaflet = () => {
             attempts++;
-            // Verificar tanto L global quanto window.L
-            const Leaflet = window.L || (typeof L !== 'undefined' ? L : null);
+            // Verificar L de qualquer forma possível
+            const Leaflet = (typeof window !== 'undefined' && window.L) || (typeof L !== 'undefined' ? L : null);
             if (Leaflet && typeof Leaflet.map === 'function') {
-                console.log('✅ Leaflet carregado com sucesso!');
-                // Garantir que está disponível globalmente
-                if (!window.L) window.L = Leaflet;
+                console.log('✅ Leaflet carregado!');
+                // Garantir que está no window
+                if (typeof window !== 'undefined' && !window.L) window.L = Leaflet;
                 resolve();
             } else if (attempts >= maxAttempts) {
-                console.error('❌ Timeout: Leaflet não carregou após', maxAttempts * interval, 'ms');
-                console.error('window.L:', typeof window.L);
-                console.error('L global:', typeof L);
-                reject(new Error('Leaflet não está disponível'));
+                console.error('❌ Timeout aguardando Leaflet');
+                reject(new Error('Leaflet não disponível'));
             } else {
                 setTimeout(checkLeaflet, interval);
             }
@@ -81,60 +79,60 @@ function waitForLeaflet(maxAttempts = 50, interval = 100) {
     });
 }
 
-// Inicializar aplicação quando tudo estiver pronto
+// Inicializar aplicação - versão simplificada e direta
 async function initializeApp() {
-    console.log('🚀 Iniciando inicialização da aplicação...');
+    console.log('🚀 Iniciando aplicação...');
     
-    // 1. Carregar API client primeiro
-    console.log('📦 Carregando API client...');
-    await loadAPIClient();
-    
-    // 2. Aguardar Leaflet estar disponível
-    console.log('🗺️ Aguardando Leaflet...');
     try {
-        await waitForLeaflet();
+        // 1. Carregar API client
+        await loadAPIClient();
+        
+        // 2. Aguardar Leaflet (com timeout menor)
+        await waitForLeaflet(30, 150);
+        
+        // 3. Usuário padrão
+        currentUser = {
+            id: 1,
+            nome: 'Usuário Teste',
+            email: 'teste@dengue.local',
+            nivel: 'admin'
+        };
+        
+        // 4. Esconder login
+        const modalLogin = document.getElementById('modal-login');
+        if (modalLogin) modalLogin.classList.remove('active');
+        
+        // 5. Inicializar app
+        initApp();
     } catch (error) {
-        console.error('❌ Erro ao aguardar Leaflet:', error);
-        alert('Erro: Leaflet não foi carregado.\n\nVerifique:\n1. Sua conexão com a internet\n2. Se os scripts estão carregando (F12 > Network)\n3. Recarregue a página (Ctrl+F5)');
-        return;
+        console.error('Erro na inicialização:', error);
+        // Tentar mesmo assim se Leaflet já estiver carregado
+        if (typeof window !== 'undefined' && window.L && typeof window.L.map === 'function') {
+            console.log('⚠️ Leaflet encontrado, tentando inicializar mesmo assim...');
+            currentUser = { id: 1, nome: 'Usuário Teste', email: 'teste@dengue.local', nivel: 'admin' };
+            const modalLogin = document.getElementById('modal-login');
+            if (modalLogin) modalLogin.classList.remove('active');
+            initApp();
+        }
     }
-    
-    // 3. Criar usuário padrão sem autenticação
-    currentUser = {
-        id: 1,
-        nome: 'Usuário Teste',
-        email: 'teste@dengue.local',
-        nivel: 'admin'
-    };
-    
-    // 4. Esconder modal de login
-    const modalLogin = document.getElementById('modal-login');
-    if (modalLogin) {
-        modalLogin.classList.remove('active');
-    }
-    
-    // 5. Inicializar aplicação
-    console.log('📱 Inicializando componentes da aplicação...');
-    initApp();
 }
 
-// Tentar múltiplos eventos de carregamento
+// Inicializar quando DOM estiver pronto
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeApp);
 } else {
-    // DOM já está carregado, iniciar imediatamente
-    console.log('📄 DOM já está pronto, iniciando...');
     initializeApp();
 }
 
-// Fallback: window.onload (garante que todos os recursos carregaram)
+// Fallback window.onload
 window.addEventListener('load', () => {
-    console.log('🪟 window.onload disparado');
-    if (!map) {
-        console.warn('⚠️ Mapa ainda não inicializado no window.onload, tentando novamente...');
+    if (!map && typeof window !== 'undefined' && window.L) {
         setTimeout(() => {
-            if (!map) initializeApp();
-        }, 1000);
+            if (!map) {
+                console.log('🔄 Tentando inicializar novamente no window.onload...');
+                initApp();
+            }
+        }, 500);
     }
 });
 
@@ -272,9 +270,17 @@ async function initApp() {
     // Inicializar mapa primeiro - é crítico
     const mapaInicializado = initMap();
     if (!mapaInicializado) {
-        console.error('❌ Falha na inicialização do mapa. Abortando inicialização completa.');
-        alert('Erro crítico: Não foi possível inicializar o mapa. Verifique o console do navegador.');
-        return;
+        console.warn('⚠️ Falha na inicialização do mapa. Tentando novamente...');
+        // Tentar novamente após um tempo
+        setTimeout(() => {
+            if (!map) {
+                const retry = initMap();
+                if (!retry) {
+                    console.error('❌ Não foi possível inicializar o mapa após retry');
+                }
+            }
+        }, 1000);
+        // Continuar mesmo assim - outras funcionalidades podem funcionar
     }
     
     initSidebar();
@@ -415,39 +421,35 @@ function setupFormButtonDelegation() {
     });
 }
 
-// Inicializar Mapa
+// Inicializar Mapa - versão simplificada
 function initMap() {
+    // Usar window.L diretamente para garantir que funciona
+    const L = (typeof window !== 'undefined' && window.L) || (typeof L !== 'undefined' ? L : null);
+    
+    if (!L || typeof L.map !== 'function') {
+        console.error('❌ Leaflet não está disponível');
+        return false;
+    }
+    
+    const mapElement = document.getElementById('map');
+    if (!mapElement) {
+        console.error('❌ Elemento #map não encontrado');
+        return false;
+    }
+    
+    // Garantir dimensões
+    if (!mapElement.style.height || mapElement.style.height === '0px') {
+        mapElement.style.height = 'calc(100vh - 70px)';
+        mapElement.style.minHeight = '400px';
+    }
+    
     try {
-        // Verificar se Leaflet está disponível
-        if (typeof L === 'undefined' || typeof L.map !== 'function') {
-            console.error('Leaflet não está carregado! Verifique se o script está incluído.');
-            console.error('L disponível?', typeof L);
-            return false;
-        }
-        
-        // Verificar se o elemento do mapa existe
-        const mapElement = document.getElementById('map');
-        if (!mapElement) {
-            console.error('Elemento #map não encontrado!');
-            return false;
-        }
-        
-        // Verificar se o elemento tem dimensões
-        const computedStyle = window.getComputedStyle(mapElement);
-        const height = computedStyle.height || mapElement.offsetHeight;
-        if (!height || height === '0px' || height === 'auto') {
-            console.warn('Elemento #map não tem altura definida. Definindo altura...');
-            mapElement.style.height = 'calc(100vh - 70px)';
-            mapElement.style.minHeight = '400px';
-        }
-        
-        console.log('Criando mapa Leaflet...');
+        console.log('🗺️ Criando mapa...');
         map = L.map('map', {
             center: [-19.81, -43.17],
             zoom: 13
         });
 
-        console.log('Adicionando camada de tiles...');
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
@@ -458,20 +460,21 @@ function initMap() {
             imperial: false
         }).addTo(map);
 
-        // Aguardar um pouco antes de adicionar eventos (garantir que o mapa está renderizado)
+        // Forçar atualização do mapa
         setTimeout(() => {
-            map.on('zoomend', updateZoomInfo);
-            map.on('moveend', updateScale);
-            updateZoomInfo();
-            updateScale();
-        }, 100);
+            if (map) {
+                map.invalidateSize();
+                map.on('zoomend', updateZoomInfo);
+                map.on('moveend', updateScale);
+                updateZoomInfo();
+                updateScale();
+                console.log('✅ Mapa inicializado e renderizado!');
+            }
+        }, 200);
         
-        console.log('✅ Mapa inicializado com sucesso!', map);
         return true;
     } catch (error) {
-        console.error('❌ Erro ao inicializar o mapa:', error);
-        console.error('Stack trace:', error.stack);
-        alert('Erro ao carregar o mapa: ' + error.message + '\n\nVerifique o console para mais detalhes.');
+        console.error('❌ Erro ao criar mapa:', error);
         return false;
     }
 }
