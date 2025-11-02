@@ -34,8 +34,39 @@ let dadosAreas = [];
 let dadosBairros = [];
 let dadosRuas = [];
 
+// Aguardar carregamento completo (Leaflet e DOM)
+function waitForLeaflet(maxAttempts = 50, interval = 100) {
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const checkLeaflet = () => {
+            attempts++;
+            if (typeof L !== 'undefined' && typeof L.map === 'function') {
+                console.log('Leaflet carregado com sucesso!');
+                resolve();
+            } else if (attempts >= maxAttempts) {
+                console.error('Timeout: Leaflet não carregou após', maxAttempts * interval, 'ms');
+                reject(new Error('Leaflet não está disponível'));
+            } else {
+                setTimeout(checkLeaflet, interval);
+            }
+        };
+        checkLeaflet();
+    });
+}
+
 // Inicializar aplicação diretamente (login removido temporariamente)
 document.addEventListener('DOMContentLoaded', async function() {
+    console.log('DOM carregado, aguardando Leaflet...');
+    
+    // Aguardar Leaflet estar disponível
+    try {
+        await waitForLeaflet();
+    } catch (error) {
+        console.error('Erro ao aguardar Leaflet:', error);
+        alert('Erro: Leaflet não foi carregado. Verifique sua conexão e recarregue a página.');
+        return;
+    }
+    
     // Criar usuário padrão sem autenticação
     currentUser = {
         id: 1,
@@ -50,6 +81,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         modalLogin.classList.remove('active');
     }
     
+    console.log('Inicializando aplicação...');
     initApp();
 });
 
@@ -184,7 +216,14 @@ async function initApp() {
         console.warn('Erro ao conectar Socket.IO:', error);
     }
 
-    initMap();
+    // Inicializar mapa primeiro - é crítico
+    const mapaInicializado = initMap();
+    if (!mapaInicializado) {
+        console.error('❌ Falha na inicialização do mapa. Abortando inicialização completa.');
+        alert('Erro crítico: Não foi possível inicializar o mapa. Verifique o console do navegador.');
+        return;
+    }
+    
     initSidebar();
     initForms();
     loadGeoJsonLayers();
@@ -327,23 +366,35 @@ function setupFormButtonDelegation() {
 function initMap() {
     try {
         // Verificar se Leaflet está disponível
-        if (typeof L === 'undefined') {
+        if (typeof L === 'undefined' || typeof L.map !== 'function') {
             console.error('Leaflet não está carregado! Verifique se o script está incluído.');
-            return;
+            console.error('L disponível?', typeof L);
+            return false;
         }
         
         // Verificar se o elemento do mapa existe
         const mapElement = document.getElementById('map');
         if (!mapElement) {
             console.error('Elemento #map não encontrado!');
-            return;
+            return false;
         }
         
+        // Verificar se o elemento tem dimensões
+        const computedStyle = window.getComputedStyle(mapElement);
+        const height = computedStyle.height || mapElement.offsetHeight;
+        if (!height || height === '0px' || height === 'auto') {
+            console.warn('Elemento #map não tem altura definida. Definindo altura...');
+            mapElement.style.height = 'calc(100vh - 70px)';
+            mapElement.style.minHeight = '400px';
+        }
+        
+        console.log('Criando mapa Leaflet...');
         map = L.map('map', {
             center: [-19.81, -43.17],
             zoom: 13
         });
 
+        console.log('Adicionando camada de tiles...');
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
@@ -354,15 +405,21 @@ function initMap() {
             imperial: false
         }).addTo(map);
 
-        map.on('zoomend', updateZoomInfo);
-        map.on('moveend', updateScale);
-        updateZoomInfo();
-        updateScale();
+        // Aguardar um pouco antes de adicionar eventos (garantir que o mapa está renderizado)
+        setTimeout(() => {
+            map.on('zoomend', updateZoomInfo);
+            map.on('moveend', updateScale);
+            updateZoomInfo();
+            updateScale();
+        }, 100);
         
-        console.log('Mapa inicializado com sucesso!');
+        console.log('✅ Mapa inicializado com sucesso!', map);
+        return true;
     } catch (error) {
-        console.error('Erro ao inicializar o mapa:', error);
-        alert('Erro ao carregar o mapa. Verifique o console para mais detalhes.');
+        console.error('❌ Erro ao inicializar o mapa:', error);
+        console.error('Stack trace:', error.stack);
+        alert('Erro ao carregar o mapa: ' + error.message + '\n\nVerifique o console para mais detalhes.');
+        return false;
     }
 }
 
