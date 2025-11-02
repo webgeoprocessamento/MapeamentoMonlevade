@@ -20,6 +20,10 @@ app.set('io', io);
 app.use(cors());
 app.use(express.json());
 
+// Servir arquivos estáticos do diretório pai (onde está index.html)
+const path = require('path');
+app.use(express.static(path.join(__dirname, '..')));
+
 // Rotas
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/casos', require('./routes/casos'));
@@ -30,6 +34,11 @@ app.use('/api/notificacoes', require('./routes/notificacoes'));
 // Rota de saúde
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Rota raiz - servir index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
 // Socket.IO - Notificações em tempo real
