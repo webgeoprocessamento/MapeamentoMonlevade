@@ -1097,6 +1097,32 @@ form {
     color: #2196f3;
 }
 
+.tipo-foco-count-compact {
+    margin-top: 6px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    min-width: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+    transition: all 0.2s;
+}
+
+.tipo-foco-card-compact:hover .tipo-foco-count-compact {
+    transform: scale(1.1);
+    box-shadow: 0 3px 8px rgba(102, 126, 234, 0.4);
+}
+
+.tipo-foco-card-compact.selected .tipo-foco-count-compact {
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+    box-shadow: 0 3px 10px rgba(33, 150, 243, 0.4);
+}
+
 /* Tabs de Localização */
 .localizacao-tabs {
     display: flex;

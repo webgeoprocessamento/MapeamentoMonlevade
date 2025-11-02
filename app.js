@@ -1,5 +1,5 @@
 // Importar API client
-import { auth, casos, focos, areas, notificacoes } from './api.js';
+import { auth, focos, areas, notificacoes } from './api.js';
 
 // Configuração
 const API_BASE_URL = 'http://localhost:3000';
@@ -16,10 +16,8 @@ let geoJsonLayers = {
 };
 
 // Camadas
-let marcadoresCasos = L.layerGroup();
 let marcadoresFocos = L.layerGroup();
 let marcadoresAreas = L.layerGroup();
-let clusterCasos = null;
 let clusterFocos = null;
 let heatmapLayer = null;
 
@@ -29,7 +27,6 @@ let ruasList = [];
 let ruasLayer = null; // Camada de ruas para interação
 
 // Dados
-let dadosCasos = [];
 let dadosFocos = [];
 let dadosAreas = [];
 
@@ -63,11 +60,87 @@ window.logout = function() {
 };
 
 // Abrir modal de seleção de foco
-function abrirModalSelecaoFoco() {
+function abrirModalSelecaoFoco(clickLatLng = null) {
     const modal = document.getElementById('modal-selecionar-foco');
     if (modal) {
+        // Atualizar contadores antes de abrir
+        atualizarContadoresModalFoco();
+        
+        // Guardar posição do clique se fornecida
+        if (clickLatLng) {
+            map._clickLatLng = clickLatLng;
+            // Adicionar marcador temporário no mapa para indicar onde será marcado
+            if (window.tempMarkerFocus) {
+                map.removeLayer(window.tempMarkerFocus);
+            }
+            window.tempMarkerFocus = L.marker([clickLatLng.lat, clickLatLng.lng], {
+                icon: L.AwesomeMarkers.icon({
+                    icon: 'map-marker-alt',
+                    markerColor: 'red',
+                    prefix: 'fas',
+                    iconColor: 'white'
+                }),
+                zIndexOffset: 999,
+                opacity: 0.8
+            })
+            .bindPopup('<div style="text-align: center;"><strong>📍 Nova Marcação</strong><br><small>Selecione o tipo de foco para continuar</small></div>')
+            .addTo(map)
+            .openPopup();
+        }
         modal.classList.add('active');
     }
+}
+
+// Atualizar contadores de focos no modal de seleção
+function atualizarContadoresModalFoco() {
+    // Calcular totais gerais
+    const totalFocos = dadosFocos.length;
+    const totalVistoria = dadosFocos.filter(f => f.origem === 'vistoria').length;
+    const totalDenuncia = dadosFocos.filter(f => f.origem === 'denuncia').length;
+    
+    // Atualizar elementos de estatísticas gerais
+    const elemTotalFocos = document.getElementById('modal-total-focos');
+    const elemTotalVistoria = document.getElementById('modal-total-vistoria');
+    const elemTotalDenuncia = document.getElementById('modal-total-denuncia');
+    
+    if (elemTotalFocos) elemTotalFocos.textContent = totalFocos;
+    if (elemTotalVistoria) elemTotalVistoria.textContent = totalVistoria;
+    if (elemTotalDenuncia) elemTotalDenuncia.textContent = totalDenuncia;
+    
+    // Calcular contadores por tipo
+    const tiposFoco = [
+        'caixa-dagua-cisterna',
+        'balde-tambor',
+        'piscina-desativada',
+        'pneu',
+        'garrafa-lata-plastico',
+        'lixo-ceu-aberto',
+        'objetos-em-desuso',
+        'agua-parada-estrutura',
+        'vaso-planta-prato',
+        'bebedouro-animal',
+        'ralo-caixa-passagem',
+        'outro'
+    ];
+    
+    tiposFoco.forEach(tipo => {
+        const count = dadosFocos.filter(f => f.tipo === tipo).length;
+        const elemCount = document.getElementById(`count-${tipo}`);
+        if (elemCount) {
+            elemCount.textContent = count;
+            // Adicionar classe visual se houver focos registrados
+            const card = elemCount.closest('.tipo-foco-card-compact');
+            if (card) {
+                if (count > 0) {
+                    card.setAttribute('data-has-focos', 'true');
+                    elemCount.style.display = 'inline-flex';
+                } else {
+                    card.removeAttribute('data-has-focos');
+                    elemCount.style.display = 'inline-flex'; // Sempre mostrar, mas pode estar em 0
+                }
+            }
+        }
+    });
 }
 
 // Fechar modal de seleção de foco
@@ -77,6 +150,11 @@ window.fecharModalFoco = function() {
         modal.classList.remove('active');
         // Limpar seleções
         document.querySelectorAll('.tipo-foco-card-compact').forEach(c => c.classList.remove('selected'));
+        // Remover marcador temporário se não foi usado
+        if (window.tempMarkerFocus && !window.draggableMarker) {
+            map.removeLayer(window.tempMarkerFocus);
+            window.tempMarkerFocus = null;
+        }
     }
 };
 
@@ -100,6 +178,7 @@ async function initApp() {
     loadGeoJsonLayers();
     await loadDadosFromAPI();
     updateStats();
+    atualizarContadoresModalFoco(); // Atualizar contadores no modal
     setupEventListeners();
     initHeatmap();
     initClusters();
@@ -409,14 +488,13 @@ function loadGeoJsonLayers() {
                             } else {
                                 // Se o formulário não estiver aberto, abrir formulário de foco se estiver na aba de focos
                                 if (activePanel === 'panel-focos') {
-                                    // Abrir modal de seleção primeiro
-                                    abrirModalSelecaoFoco();
-                                    // Guardar informações da rua para usar depois
+                                    // Abrir modal de seleção primeiro com posição da rua
                                     map._ruaSelecionada = {
                                         nome: nomeRua,
                                         latlng: latlng,
                                         clickLatLng: e.latlng
                                     };
+                                    abrirModalSelecaoFoco(latlng);
                                 } else {
                                     // Para outros casos, apenas mostrar popup
                                     layer.openPopup();
@@ -446,7 +524,6 @@ function loadGeoJsonLayers() {
 // Carregar dados da API
 async function loadDadosFromAPI() {
     try {
-        dadosCasos = await casos.list() || [];
         dadosFocos = await focos.list() || [];
         dadosAreas = await areas.list() || [];
         renderMapData();
@@ -460,43 +537,16 @@ async function loadDadosFromAPI() {
 // Renderizar dados no mapa
 function renderMapData() {
     // Limpar camadas
-    map.removeLayer(marcadoresCasos);
     map.removeLayer(marcadoresFocos);
     map.removeLayer(marcadoresAreas);
-    if (clusterCasos) map.removeLayer(clusterCasos);
     if (clusterFocos) map.removeLayer(clusterFocos);
     if (heatmapLayer) map.removeLayer(heatmapLayer);
 
-    marcadoresCasos = L.layerGroup();
     marcadoresFocos = L.layerGroup();
     marcadoresAreas = L.layerGroup();
 
     // Criar clusters
-    clusterCasos = L.markerClusterGroup();
     clusterFocos = L.markerClusterGroup();
-
-    // Adicionar casos
-    dadosCasos.forEach(caso => {
-        const statusColors = {
-            'confirmado': 'red',
-            'suspeito': 'orange',
-            'descartado': 'gray'
-        };
-        const icon = L.AwesomeMarkers.icon({
-            icon: 'virus',
-            markerColor: statusColors[caso.status] || 'red',
-            prefix: 'fas'
-        });
-        const marker = L.marker([caso.latitude, caso.longitude], { icon })
-            .bindPopup(`<h4>Casos de Dengue</h4>
-                <p><strong>Status:</strong> ${caso.status}</p>
-                <p><strong>Data:</strong> ${formatDate(caso.data)}</p>
-                <p>${caso.descricao || ''}</p>`)
-            .on('click', () => map.setView([caso.latitude, caso.longitude], 16));
-        
-        clusterCasos.addLayer(marker);
-        marcadoresCasos.addLayer(marker);
-    });
 
     // Adicionar focos
     dadosFocos.forEach(foco => {
@@ -558,7 +608,6 @@ function renderMapData() {
     });
 
     // Adicionar ao mapa
-    marcadoresCasos.addTo(map);
     marcadoresFocos.addTo(map);
     marcadoresAreas.addTo(map);
     
@@ -600,9 +649,7 @@ function updateHeatmap() {
         map.removeLayer(heatmapLayer);
     }
 
-    const pontos = dadosCasos
-        .filter(c => c.status === 'confirmado')
-        .map(c => [c.latitude, c.longitude, 1]);
+    const pontos = dadosFocos.map(f => [f.latitude, f.longitude, 1]);
 
     if (pontos.length > 0) {
         const radius = parseInt(document.getElementById('heatmap-radius').value);
@@ -621,14 +668,10 @@ function initClusters() {
     
     toggle.addEventListener('change', (e) => {
         if (e.target.checked) {
-            if (clusterCasos) map.addLayer(clusterCasos);
             if (clusterFocos) map.addLayer(clusterFocos);
-            marcadoresCasos.removeFrom(map);
             marcadoresFocos.removeFrom(map);
         } else {
-            if (clusterCasos) map.removeLayer(clusterCasos);
             if (clusterFocos) map.removeLayer(clusterFocos);
-            marcadoresCasos.addTo(map);
             marcadoresFocos.addTo(map);
         }
     });
@@ -637,10 +680,6 @@ function initClusters() {
 // Atualizar Clusters
 function updateClusters() {
     if (document.getElementById('toggle-clusters').checked) {
-        if (clusterCasos && !map.hasLayer(clusterCasos)) {
-            map.addLayer(clusterCasos);
-            marcadoresCasos.removeFrom(map);
-        }
         if (clusterFocos && !map.hasLayer(clusterFocos)) {
             map.addLayer(clusterFocos);
             marcadoresFocos.removeFrom(map);
@@ -678,9 +717,7 @@ function switchPanel(panelName) {
     document.querySelector(`[data-panel="${panelName}"]`).classList.add('active');
     document.getElementById(`panel-${panelName}`).classList.add('active');
 
-    if (panelName === 'casos') {
-        renderCasos();
-    } else if (panelName === 'focos') {
+    if (panelName === 'focos') {
         renderFocos('todos', 'todos');
     } else if (panelName === 'areas') {
         renderAreas();
@@ -702,6 +739,11 @@ function initForms() {
             map.removeLayer(window.draggableMarker);
             window.draggableMarker = null;
         }
+        // Remover marcador temporário se existir
+        if (window.tempMarkerFocus) {
+            map.removeLayer(window.tempMarkerFocus);
+            window.tempMarkerFocus = null;
+        }
         modal.classList.remove('active');
         form.reset();
     });
@@ -712,68 +754,101 @@ function initForms() {
             map.removeLayer(window.draggableMarker);
             window.draggableMarker = null;
         }
+        // Remover marcador temporário se existir
+        if (window.tempMarkerFocus) {
+            map.removeLayer(window.tempMarkerFocus);
+            window.tempMarkerFocus = null;
+        }
         modal.classList.remove('active');
         form.reset();
     });
 
     form.addEventListener('submit', handleFormSubmit);
 
-    document.getElementById('btn-adicionar-caso').addEventListener('click', () => {
-        openForm('caso', null, map.getCenter());
-    });
-
-    document.getElementById('btn-adicionar-foco').addEventListener('click', () => {
-        openForm('foco', null, map.getCenter());
-    });
+    // Botão adicionar foco (se existir)
+    const btnAdicionarFoco = document.getElementById('btn-adicionar-foco');
+    if (btnAdicionarFoco) {
+        btnAdicionarFoco.addEventListener('click', () => {
+            openForm('foco', null, map.getCenter());
+        });
+    }
 
     // Botão flutuante para abrir modal de seleção de foco
     const btnFloatingFoco = document.getElementById('btn-floating-foco');
     const btnAbrirSelecao = document.getElementById('btn-abrir-selecao-foco');
     
     if (btnFloatingFoco) {
-        btnFloatingFoco.addEventListener('click', abrirModalSelecaoFoco);
+        btnFloatingFoco.addEventListener('click', (e) => {
+            e.stopPropagation(); // Evitar propagação de eventos
+            // Usar centro do mapa como posição inicial
+            const center = map.getCenter();
+            abrirModalSelecaoFoco({ lat: center.lat, lng: center.lng });
+            // Focar no mapa para facilitar navegação
+            map.getContainer().focus();
+        });
     }
     
     if (btnAbrirSelecao) {
-        btnAbrirSelecao.addEventListener('click', abrirModalSelecaoFoco);
+        btnAbrirSelecao.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const center = map.getCenter();
+            abrirModalSelecaoFoco({ lat: center.lat, lng: center.lng });
+        });
     }
 
-    // Sistema de seleção de tipo de foco por cards no modal
-    document.querySelectorAll('.tipo-foco-card-compact').forEach(card => {
-        card.addEventListener('click', () => {
-            const tipo = card.getAttribute('data-tipo');
-            const origem = document.getElementById('selecao-origem-foco-modal').value;
-            
-            // Remover seleção anterior
-            document.querySelectorAll('.tipo-foco-card-compact').forEach(c => c.classList.remove('selected'));
-            
-            // Marcar card selecionado
-            card.classList.add('selected');
-            
-            // Fechar modal de seleção
-            window.fecharModalFoco();
-            
-            // Usar posição do clique no mapa, rua selecionada, ou centro do mapa
-            let latlng = map._clickLatLng || (map._ruaSelecionada ? map._ruaSelecionada.latlng : null) || map.getCenter();
-            
-            // Se foi selecionada uma rua, preparar dados de endereço
-            let formData = {
-                tipo: tipo,
-                origem: origem
-            };
-            
-            if (map._ruaSelecionada) {
-                formData.rua = map._ruaSelecionada.nome;
-                formData.clickLatLng = map._ruaSelecionada.clickLatLng;
-            }
-            
-            // Limpar dados temporários
-            delete map._clickLatLng;
-            delete map._ruaSelecionada;
-            
+    // Sistema de seleção de tipo de foco por cards no modal (usar event delegation)
+    document.addEventListener('click', (e) => {
+        const card = e.target.closest('.tipo-foco-card-compact');
+        if (!card) return;
+        
+        const modalSelecao = document.getElementById('modal-selecionar-foco');
+        if (!modalSelecao || !modalSelecao.classList.contains('active')) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const tipo = card.getAttribute('data-tipo');
+        const origemSelect = document.getElementById('selecao-origem-foco-modal');
+        const origem = origemSelect ? origemSelect.value : 'vistoria';
+        
+        // Remover seleção anterior
+        document.querySelectorAll('.tipo-foco-card-compact').forEach(c => c.classList.remove('selected'));
+        
+        // Marcar card selecionado
+        card.classList.add('selected');
+        
+        // Fechar modal de seleção
+        window.fecharModalFoco();
+        
+        // Usar posição do clique no mapa, rua selecionada, ou centro do mapa
+        let latlng = map._clickLatLng || (map._ruaSelecionada ? map._ruaSelecionada.latlng : null) || map.getCenter();
+        
+        // Remover marcador temporário se existir
+        if (window.tempMarkerFocus) {
+            map.removeLayer(window.tempMarkerFocus);
+            window.tempMarkerFocus = null;
+        }
+        
+        // Se foi selecionada uma rua, preparar dados de endereço
+        let formData = {
+            tipo: tipo,
+            origem: origem
+        };
+        
+        if (map._ruaSelecionada) {
+            formData.rua = map._ruaSelecionada.nome;
+            formData.clickLatLng = map._ruaSelecionada.clickLatLng;
+        }
+        
+        // Limpar dados temporários
+        delete map._clickLatLng;
+        delete map._ruaSelecionada;
+        
+        // Pequeno delay para garantir que o modal foi fechado
+        setTimeout(() => {
             // Abrir formulário com tipo pré-selecionado
             openForm('foco', null, latlng, formData);
-        });
+        }, 100);
     });
 
     document.getElementById('btn-adicionar-area').addEventListener('click', () => {
@@ -804,12 +879,9 @@ function initForms() {
             }
         } else if (activePanel === 'panel-focos') {
             // Para focos, abrir modal de seleção primeiro
-            abrirModalSelecaoFoco();
-            // Guardar posição do clique para usar depois
-            map._clickLatLng = e.latlng;
-        } else if (activePanel === 'panel-casos' || activePanel === 'panel-areas') {
-            const type = activePanel.replace('panel-', '');
-            openForm(type, null, e.latlng);
+            abrirModalSelecaoFoco(e.latlng);
+        } else if (activePanel === 'panel-areas') {
+            openForm('area', null, e.latlng);
         }
     });
     
@@ -904,7 +976,6 @@ function openForm(type, item, latlng, prefillData = null) {
         window.draggableMarker = null;
     }
     
-    document.getElementById('form-group-status').style.display = type === 'caso' ? 'block' : 'none';
     document.getElementById('form-group-tipo').style.display = type === 'foco' ? 'block' : 'none';
     document.getElementById('form-group-origem').style.display = type === 'foco' ? 'block' : 'none';
     document.getElementById('form-group-nivel').style.display = type === 'area' ? 'block' : 'none';
@@ -913,6 +984,12 @@ function openForm(type, item, latlng, prefillData = null) {
 
     document.getElementById('form-latitude').value = latlng.lat.toFixed(6);
     document.getElementById('form-longitude').value = latlng.lng.toFixed(6);
+    
+    // Remover marcador temporário se existir
+    if (window.tempMarkerFocus) {
+        map.removeLayer(window.tempMarkerFocus);
+        window.tempMarkerFocus = null;
+    }
     
     // Para focos, criar marcador arrastável no mapa
     if (type === 'foco') {
@@ -944,6 +1021,12 @@ function openForm(type, item, latlng, prefillData = null) {
         const selectedTipo = prefillData?.tipo || item?.tipo || 'outro';
         const iconName = tipoIcons[selectedTipo] || 'bug';
         
+        // Remover marcador antigo se existir
+        if (window.draggableMarker) {
+            map.removeLayer(window.draggableMarker);
+            window.draggableMarker = null;
+        }
+        
         window.draggableMarker = L.marker([latlng.lat, latlng.lng], {
             icon: L.AwesomeMarkers.icon({
                 icon: iconName,
@@ -954,7 +1037,7 @@ function openForm(type, item, latlng, prefillData = null) {
             draggable: true,
             zIndexOffset: 1000
         }).addTo(map)
-        .bindPopup('<div style="text-align: center;"><strong>📍 Marcador Arrastável</strong><br><small>Arraste para ajustar a posição</small><br><button onclick="window.draggableMarker.closePopup()" style="margin-top: 5px; padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">OK</button></div>', {autoClose: false})
+        .bindPopup('<div style="text-align: center;"><strong>📍 Marcador Arrastável</strong><br><small>Arraste para ajustar a posição</small><br><button onclick="if(window.draggableMarker) window.draggableMarker.closePopup()" style="margin-top: 5px; padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">OK</button></div>', {autoClose: false})
         .openPopup();
         
         // Atualizar coordenadas quando o marcador é arrastado
@@ -966,13 +1049,17 @@ function openForm(type, item, latlng, prefillData = null) {
         window.draggableMarker.on('dragend', function(e) {
             updateCoordenadasFromMarker();
             // Fechar popup após arrastar
-            if (window.draggableMarker.isPopupOpen()) {
-                setTimeout(() => window.draggableMarker.closePopup(), 1000);
+            if (window.draggableMarker && window.draggableMarker.isPopupOpen()) {
+                setTimeout(() => {
+                    if (window.draggableMarker) {
+                        window.draggableMarker.closePopup();
+                    }
+                }, 1000);
             }
         });
         
-        // Centralizar mapa no marcador inicialmente
-        map.setView([latlng.lat, latlng.lng], 17);
+        // Centralizar mapa no marcador inicialmente com zoom apropriado
+        map.setView([latlng.lat, latlng.lng], Math.max(map.getZoom(), 17));
     } else {
         // Para outros tipos, esconder status do marcador
         const statusMarcador = document.getElementById('status-marcador');
@@ -982,7 +1069,6 @@ function openForm(type, item, latlng, prefillData = null) {
     }
 
     const titles = {
-        'caso': 'Adicionar Caso de Dengue',
         'foco': 'Registrar Foco do Mosquito',
         'area': 'Adicionar Área de Risco'
     };
@@ -992,9 +1078,7 @@ function openForm(type, item, latlng, prefillData = null) {
         document.getElementById('form-id').value = item.id;
         document.getElementById('form-descricao').value = item.descricao || '';
         document.getElementById('form-data').value = item.data || new Date().toISOString().slice(0, 16);
-        if (type === 'caso') {
-            document.getElementById('form-status').value = item.status || 'confirmado';
-        } else if (type === 'foco') {
+        if (type === 'foco') {
             document.getElementById('form-tipo').value = item.tipo || 'caixa-dagua-cisterna';
             document.getElementById('form-origem').value = item.origem || 'vistoria';
             updateTipoDescricao();
@@ -1123,14 +1207,7 @@ async function handleFormSubmit(e) {
     };
 
     try {
-        if (type === 'caso') {
-            itemData.status = document.getElementById('form-status').value;
-            if (id) {
-                await casos.update(id, itemData);
-            } else {
-                await casos.create(itemData);
-            }
-        } else if (type === 'foco') {
+        if (type === 'foco') {
             itemData.tipo = document.getElementById('form-tipo').value;
             itemData.origem = document.getElementById('form-origem').value;
             if (id) {
@@ -1150,6 +1227,7 @@ async function handleFormSubmit(e) {
 
         await loadDadosFromAPI();
         updateStats();
+        atualizarContadoresModalFoco(); // Atualizar contadores após salvar
         
         // Remover marcador arrastável ao fechar
         if (window.draggableMarker) {
@@ -1160,8 +1238,7 @@ async function handleFormSubmit(e) {
         document.getElementById('modal-form').classList.remove('active');
         
         const activePanel = document.querySelector('.panel.active').id;
-        if (activePanel === 'panel-casos') renderCasos();
-        else if (activePanel === 'panel-focos') {
+        if (activePanel === 'panel-focos') {
             const origem = document.getElementById('filter-origem-focos')?.value || 'todos';
             const tipo = document.getElementById('filter-tipo-focos')?.value || 'todos';
             renderFocos(tipo, origem);
@@ -1173,43 +1250,6 @@ async function handleFormSubmit(e) {
 }
 
 // Renderizar listas
-function renderCasos(filterStatus = 'todos') {
-    const container = document.getElementById('lista-casos');
-    let casosList = [...dadosCasos];
-    
-    if (filterStatus !== 'todos') {
-        casosList = casosList.filter(c => c.status === filterStatus);
-    }
-
-    if (casosList.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Nenhum caso encontrado.</p>';
-        return;
-    }
-
-    container.innerHTML = casosList.map(caso => `
-        <div class="list-item" onclick="map.setView([${caso.latitude}, ${caso.longitude}], 16)">
-            <div class="list-item-header">
-                <span class="list-item-title">Caso de Dengue</span>
-                <div class="list-item-actions">
-                    <button class="btn-icon" onclick="event.stopPropagation(); editarItem('caso', '${caso.id}')" title="Editar">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    ${currentUser?.nivel === 'admin' ? `
-                    <button class="btn-icon" onclick="event.stopPropagation(); deletarItem('caso', '${caso.id}')" title="Excluir">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                    ` : ''}
-                </div>
-            </div>
-            <div class="list-item-info">
-                <strong>Status:</strong> ${caso.status}<br>
-                <strong>Data:</strong> ${formatDate(caso.data)}<br>
-                ${caso.descricao ? `<strong>Descrição:</strong> ${caso.descricao}` : ''}
-            </div>
-        </div>
-    `).join('');
-}
-
 function renderFocos(filterTipo = 'todos', filterOrigem = 'todos') {
     const container = document.getElementById('lista-focos');
     let focosList = [...dadosFocos];
@@ -1297,9 +1337,7 @@ function renderAreas(filterNivel = 'todos') {
 // Editar Item
 window.editarItem = function(type, id) {
     let item;
-    if (type === 'caso') {
-        item = dadosCasos.find(c => c.id == id);
-    } else if (type === 'foco') {
+    if (type === 'foco') {
         item = dadosFocos.find(f => f.id == id);
     } else if (type === 'area') {
         item = dadosAreas.find(a => a.id == id);
@@ -1315,9 +1353,7 @@ window.deletarItem = async function(type, id) {
     if (!confirm('Tem certeza que deseja excluir este item?')) return;
 
     try {
-        if (type === 'caso') {
-            await casos.delete(id);
-        } else if (type === 'foco') {
+        if (type === 'foco') {
             await focos.delete(id);
         } else if (type === 'area') {
             await areas.delete(id);
@@ -1325,10 +1361,10 @@ window.deletarItem = async function(type, id) {
 
         await loadDadosFromAPI();
         updateStats();
+        atualizarContadoresModalFoco(); // Atualizar contadores após excluir
         
         const activePanel = document.querySelector('.panel.active').id;
-        if (activePanel === 'panel-casos') renderCasos();
-        else if (activePanel === 'panel-focos') {
+        if (activePanel === 'panel-focos') {
             const origem = document.getElementById('filter-origem-focos')?.value || 'todos';
             const tipo = document.getElementById('filter-tipo-focos')?.value || 'todos';
             renderFocos(tipo, origem);
@@ -1341,33 +1377,19 @@ window.deletarItem = async function(type, id) {
 
 // Atualizar Estatísticas
 function updateStats() {
-    document.getElementById('total-casos').textContent = dadosCasos.length;
     document.getElementById('total-focos').textContent = dadosFocos.length;
     document.getElementById('total-areas-risco').textContent = dadosAreas.length;
     
     // Atualizar badges de contagem nos painéis
-    const countCasos = document.getElementById('count-casos');
     const countFocos = document.getElementById('count-focos');
     const countAreas = document.getElementById('count-areas');
     
-    if (countCasos) countCasos.textContent = dadosCasos.length;
     if (countFocos) countFocos.textContent = dadosFocos.length;
     if (countAreas) countAreas.textContent = dadosAreas.length;
 }
 
 // Atualizar Relatórios
 async function updateRelatorios() {
-    const casosPorStatus = {};
-    dadosCasos.forEach(c => {
-        casosPorStatus[c.status] = (casosPorStatus[c.status] || 0) + 1;
-    });
-    let htmlCasos = '<ul style="list-style: none; padding: 0;">';
-    Object.keys(casosPorStatus).forEach(status => {
-        htmlCasos += `<li style="padding: 5px 0;"><strong>${status}:</strong> ${casosPorStatus[status]}</li>`;
-    });
-    htmlCasos += '</ul>';
-    document.getElementById('chart-casos-status').innerHTML = htmlCasos || '<p>Sem dados</p>';
-
     const focosPorTipo = {};
     dadosFocos.forEach(f => {
         focosPorTipo[f.tipo] = (focosPorTipo[f.tipo] || 0) + 1;
@@ -1473,10 +1495,6 @@ function handleNovaAreaRisco(data) {
 
 // Setup Event Listeners
 function setupEventListeners() {
-    document.getElementById('filter-status-casos').addEventListener('change', (e) => {
-        renderCasos(e.target.value);
-    });
-
     document.getElementById('filter-tipo-focos').addEventListener('change', (e) => {
         const origem = document.getElementById('filter-origem-focos').value;
         renderFocos(e.target.value, origem);
@@ -1557,7 +1575,6 @@ function setupEventListeners() {
     // Exportar dados
     document.getElementById('btn-exportar-dados').addEventListener('click', () => {
         const dadosExport = {
-            casos: dadosCasos,
             focos: dadosFocos,
             areas: dadosAreas,
             exportDate: new Date().toISOString()
@@ -1592,39 +1609,10 @@ function gerarPDF() {
     y += 10;
 
     doc.setFontSize(10);
-    doc.text(`Total de Casos: ${dadosCasos.length}`, 20, y);
-    y += 6;
     doc.text(`Total de Focos: ${dadosFocos.length}`, 20, y);
     y += 6;
     doc.text(`Total de Áreas de Risco: ${dadosAreas.length}`, 20, y);
     y += 10;
-
-    if (dadosCasos.length > 0) {
-        doc.setFontSize(12);
-        doc.text('Casos de Dengue', 14, y);
-        y += 8;
-
-        const casosTable = dadosCasos.slice(0, 20).map(c => [
-            c.id,
-            c.status,
-            formatDate(c.data).split(' ')[0],
-            c.latitude.toFixed(4),
-            c.longitude.toFixed(4)
-        ]);
-
-        doc.autoTable({
-            startY: y,
-            head: [['ID', 'Status', 'Data', 'Latitude', 'Longitude']],
-            body: casosTable,
-            styles: { fontSize: 8 }
-        });
-        y = doc.lastAutoTable.finalY + 10;
-    }
-
-    if (y > 250) {
-        doc.addPage();
-        y = 20;
-    }
 
     if (dadosFocos.length > 0) {
         doc.setFontSize(12);
@@ -1921,7 +1909,6 @@ function isPointInPolygon(point, polygon) {
 
 // Fallback para dados locais
 function loadDadosLocal() {
-    dadosCasos = JSON.parse(localStorage.getItem('dengue_casos') || '[]');
     dadosFocos = JSON.parse(localStorage.getItem('dengue_focos') || '[]');
     dadosAreas = JSON.parse(localStorage.getItem('dengue_areas') || '[]');
     renderMapData();
