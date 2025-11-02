@@ -15,9 +15,9 @@ let geoJsonLayers = {
     ruas: null
 };
 
-// Camadas
-let marcadoresFocos = L.layerGroup();
-let marcadoresAreas = L.layerGroup();
+// Camadas (serão inicializadas após o Leaflet carregar)
+let marcadoresFocos = null;
+let marcadoresAreas = null;
 let clusterFocos = null;
 let heatmapLayer = null;
 
@@ -568,12 +568,38 @@ async function loadDadosFromAPI() {
 
 // Renderizar dados no mapa
 function renderMapData() {
+    if (!map || typeof L === 'undefined') {
+        console.error('Mapa ou Leaflet não está inicializado!');
+        return;
+    }
+    
+    // Inicializar camadas se ainda não foram inicializadas
+    if (!marcadoresFocos) {
+        marcadoresFocos = L.layerGroup();
+    }
+    if (!marcadoresAreas) {
+        marcadoresAreas = L.layerGroup();
+    }
+    
     // Limpar camadas
-    map.removeLayer(marcadoresFocos);
-    map.removeLayer(marcadoresAreas);
-    if (clusterFocos) map.removeLayer(clusterFocos);
-    if (heatmapLayer) map.removeLayer(heatmapLayer);
+    try {
+        if (marcadoresFocos && map.hasLayer(marcadoresFocos)) {
+            map.removeLayer(marcadoresFocos);
+        }
+        if (marcadoresAreas && map.hasLayer(marcadoresAreas)) {
+            map.removeLayer(marcadoresAreas);
+        }
+        if (clusterFocos && map.hasLayer(clusterFocos)) {
+            map.removeLayer(clusterFocos);
+        }
+        if (heatmapLayer && map.hasLayer(heatmapLayer)) {
+            map.removeLayer(heatmapLayer);
+        }
+    } catch (e) {
+        console.warn('Erro ao limpar camadas:', e);
+    }
 
+    // Recriar camadas
     marcadoresFocos = L.layerGroup();
     marcadoresAreas = L.layerGroup();
 
