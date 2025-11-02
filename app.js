@@ -263,22 +263,29 @@ function loadGeoJsonLayers() {
                                     }
                                 }
                                 
-                                // Atualizar coordenadas
-                                document.getElementById('form-latitude').value = latlng.lat.toFixed(6);
-                                document.getElementById('form-longitude').value = latlng.lng.toFixed(6);
-                                map.setView([latlng.lat, latlng.lng], 18);
-                                
-                                // Adicionar marcador temporário
-                                if (window.tempMarker) {
-                                    map.removeLayer(window.tempMarker);
+                                // Atualizar coordenadas - se houver marcador arrastável, mover ele
+                                const formType = document.getElementById('form-type')?.value;
+                                if (formType === 'foco' && window.draggableMarker) {
+                                    window.draggableMarker.setLatLng([latlng.lat, latlng.lng]);
+                                    map.setView([latlng.lat, latlng.lng], 18);
+                                    updateCoordenadasFromMarker();
+                                } else {
+                                    document.getElementById('form-latitude').value = latlng.lat.toFixed(6);
+                                    document.getElementById('form-longitude').value = latlng.lng.toFixed(6);
+                                    map.setView([latlng.lat, latlng.lng], 18);
+                                    
+                                    // Adicionar marcador temporário
+                                    if (window.tempMarker) {
+                                        map.removeLayer(window.tempMarker);
+                                    }
+                                    window.tempMarker = L.marker([latlng.lat, latlng.lng], {
+                                        icon: L.AwesomeMarkers.icon({
+                                            icon: 'map-marker-alt',
+                                            markerColor: 'blue',
+                                            prefix: 'fas'
+                                        })
+                                    }).addTo(map);
                                 }
-                                window.tempMarker = L.marker([latlng.lat, latlng.lng], {
-                                    icon: L.AwesomeMarkers.icon({
-                                        icon: 'map-marker-alt',
-                                        markerColor: 'blue',
-                                        prefix: 'fas'
-                                    })
-                                }).addTo(map);
                             } else {
                                 // Se o formulário não estiver aberto, abrir formulário de foco se estiver na aba de focos
                                 if (activePanel === 'panel-focos') {
@@ -570,11 +577,21 @@ function initForms() {
     const cancelForm = document.getElementById('cancel-form');
 
     closeModal.addEventListener('click', () => {
+        // Remover marcador arrastável ao fechar
+        if (window.draggableMarker) {
+            map.removeLayer(window.draggableMarker);
+            window.draggableMarker = null;
+        }
         modal.classList.remove('active');
         form.reset();
     });
 
     cancelForm.addEventListener('click', () => {
+        // Remover marcador arrastável ao cancelar
+        if (window.draggableMarker) {
+            map.removeLayer(window.draggableMarker);
+            window.draggableMarker = null;
+        }
         modal.classList.remove('active');
         form.reset();
     });
@@ -648,14 +665,22 @@ function initForms() {
         const modalForm = document.getElementById('modal-form');
         const isFormOpen = modalForm && modalForm.classList.contains('active');
         
-        // Se o formulário estiver aberto, atualizar coordenadas
+        // Se o formulário estiver aberto, atualizar coordenadas do marcador arrastável
         if (isFormOpen) {
-            document.getElementById('form-latitude').value = e.latlng.lat.toFixed(6);
-            document.getElementById('form-longitude').value = e.latlng.lng.toFixed(6);
-            // Remover marcador temporário se existir
-            if (window.tempMarker) {
-                map.removeLayer(window.tempMarker);
-                window.tempMarker = null;
+            const formType = document.getElementById('form-type')?.value;
+            // Para focos, atualizar marcador arrastável se existir
+            if (formType === 'foco' && window.draggableMarker) {
+                window.draggableMarker.setLatLng(e.latlng);
+                updateCoordenadasFromMarker();
+            } else {
+                // Para outros tipos, atualizar coordenadas normalmente
+                document.getElementById('form-latitude').value = e.latlng.lat.toFixed(6);
+                document.getElementById('form-longitude').value = e.latlng.lng.toFixed(6);
+                // Remover marcador temporário se existir
+                if (window.tempMarker) {
+                    map.removeLayer(window.tempMarker);
+                    window.tempMarker = null;
+                }
             }
         } else if (activePanel === 'panel-focos') {
             // Para focos, abrir modal de seleção primeiro
@@ -696,8 +721,18 @@ function initForms() {
     if (btnLocalizarMapa) {
         btnLocalizarMapa.addEventListener('click', () => {
             const center = map.getCenter();
-            document.getElementById('form-latitude').value = center.lat.toFixed(6);
-            document.getElementById('form-longitude').value = center.lng.toFixed(6);
+            const formType = document.getElementById('form-type')?.value;
+            
+            // Se for foco e houver marcador arrastável, mover o marcador
+            if (formType === 'foco' && window.draggableMarker) {
+                window.draggableMarker.setLatLng(center);
+                map.setView(center, 17);
+                updateCoordenadasFromMarker();
+            } else {
+                // Caso contrário, atualizar coordenadas diretamente
+                document.getElementById('form-latitude').value = center.lat.toFixed(6);
+                document.getElementById('form-longitude').value = center.lng.toFixed(6);
+            }
         });
     }
     
@@ -705,6 +740,98 @@ function initForms() {
     const btnBuscarEndereco = document.getElementById('btn-buscar-endereco');
     if (btnBuscarEndereco) {
         btnBuscarEndereco.addEventListener('click', buscarLocalizacaoPorEndereco);
+    }
+    
+    // Busca rápida de endereço
+    const btnBuscarRapida = document.getElementById('btn-buscar-rapida');
+    const inputBuscaRapida = document.getElementById('busca-endereco-rapida');
+    if (btnBuscarRapida && inputBuscaRapida) {
+        const realizarBuscaRapida = async () => {
+            const termo = inputBuscaRapida.value.trim();
+            if (!termo) {
+                alert('Digite um endereço para buscar');
+                return;
+            }
+            
+            btnBuscarRapida.disabled = true;
+            btnBuscarRapida.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            try {
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(termo + ', João Monlevade, MG, Brasil')}&limit=1`;
+                const response = await fetch(url, {
+                    headers: { 'User-Agent': 'Caça-Dengue/1.0' }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.length > 0) {
+                        const lat = parseFloat(data[0].lat);
+                        const lng = parseFloat(data[0].lon);
+                        
+                        // Atualizar coordenadas
+                        document.getElementById('form-latitude').value = lat.toFixed(6);
+                        document.getElementById('form-longitude').value = lng.toFixed(6);
+                        
+                        // Se houver marcador arrastável, mover
+                        if (window.draggableMarker) {
+                            window.draggableMarker.setLatLng([lat, lng]);
+                            map.setView([lat, lng], 17);
+                            updateCoordenadasFromMarker();
+                        } else {
+                            map.setView([lat, lng], 17);
+                        }
+                        
+                        // Feedback visual
+                        inputBuscaRapida.style.borderColor = '#28a745';
+                        setTimeout(() => {
+                            inputBuscaRapida.style.borderColor = '#ccc';
+                        }, 2000);
+                    } else {
+                        alert('Endereço não encontrado. Tente ser mais específico.');
+                        inputBuscaRapida.style.borderColor = '#dc3545';
+                        setTimeout(() => {
+                            inputBuscaRapida.style.borderColor = '#ccc';
+                        }, 2000);
+                    }
+                }
+            } catch (error) {
+                console.error('Erro na busca:', error);
+                alert('Erro ao buscar endereço. Verifique sua conexão.');
+            } finally {
+                btnBuscarRapida.disabled = false;
+                btnBuscarRapida.innerHTML = '<i class="fas fa-search"></i>';
+            }
+        };
+        
+        btnBuscarRapida.addEventListener('click', realizarBuscaRapida);
+        inputBuscaRapida.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                realizarBuscaRapida();
+            }
+        });
+    }
+    
+    // Botão copiar coordenadas
+    const btnCopiarCoordenadas = document.getElementById('btn-copiar-coordenadas');
+    if (btnCopiarCoordenadas) {
+        btnCopiarCoordenadas.addEventListener('click', () => {
+            const lat = document.getElementById('form-latitude').value;
+            const lng = document.getElementById('form-longitude').value;
+            const texto = `${lat}, ${lng}`;
+            
+            navigator.clipboard.writeText(texto).then(() => {
+                // Feedback visual
+                const originalHTML = btnCopiarCoordenadas.innerHTML;
+                btnCopiarCoordenadas.innerHTML = '<i class="fas fa-check"></i>';
+                btnCopiarCoordenadas.style.background = '#28a745';
+                setTimeout(() => {
+                    btnCopiarCoordenadas.innerHTML = originalHTML;
+                    btnCopiarCoordenadas.style.background = '';
+                }, 1500);
+            }).catch(() => {
+                alert('Erro ao copiar. Coordenadas: ' + texto);
+            });
+        });
     }
 }
 
@@ -728,10 +855,24 @@ function openForm(type, item, latlng, prefillData = null) {
     document.getElementById('content-loc-mapa').style.display = 'block';
     document.getElementById('endereco-resultado').style.display = 'none';
     
-    // Remover marcador temporário se existir
+    // Resetar texto informativo
+    const textoInfo = document.getElementById('texto-info-localizacao');
+    if (textoInfo) {
+        textoInfo.innerHTML = 'Clique no mapa para definir a localização ou ajuste as coordenadas abaixo.';
+    }
+    const statusMarcador = document.getElementById('status-marcador');
+    if (statusMarcador) {
+        statusMarcador.style.display = 'none';
+    }
+    
+    // Remover marcadores temporários se existirem
     if (window.tempMarker) {
         map.removeLayer(window.tempMarker);
         window.tempMarker = null;
+    }
+    if (window.draggableMarker) {
+        map.removeLayer(window.draggableMarker);
+        window.draggableMarker = null;
     }
     
     document.getElementById('form-group-status').style.display = type === 'caso' ? 'block' : 'none';
@@ -743,6 +884,73 @@ function openForm(type, item, latlng, prefillData = null) {
 
     document.getElementById('form-latitude').value = latlng.lat.toFixed(6);
     document.getElementById('form-longitude').value = latlng.lng.toFixed(6);
+    
+    // Para focos, criar marcador arrastável no mapa
+    if (type === 'foco') {
+        // Atualizar texto informativo
+        const textoInfo = document.getElementById('texto-info-localizacao');
+        const statusMarcador = document.getElementById('status-marcador');
+        if (textoInfo) {
+            textoInfo.innerHTML = '<strong>Modo de Marcação Ativo:</strong> Arraste o marcador vermelho no mapa para posicionar o foco exatamente. Ou clique no mapa para reposicionar.';
+        }
+        if (statusMarcador) {
+            statusMarcador.style.display = 'block';
+        }
+        
+        // Criar marcador arrastável
+        const tipoIcons = {
+            'caixa-dagua-cisterna': 'tint',
+            'balde-tambor': 'flask',
+            'piscina-desativada': 'water',
+            'pneu': 'circle',
+            'garrafa-lata-plastico': 'recycle',
+            'lixo-ceu-aberto': 'trash',
+            'objetos-em-desuso': 'box',
+            'agua-parada-estrutura': 'building',
+            'vaso-planta-prato': 'leaf',
+            'bebedouro-animal': 'paw',
+            'ralo-caixa-passagem': 'grip-lines-vertical',
+            'outro': 'exclamation-triangle'
+        };
+        const selectedTipo = prefillData?.tipo || item?.tipo || 'outro';
+        const iconName = tipoIcons[selectedTipo] || 'bug';
+        
+        window.draggableMarker = L.marker([latlng.lat, latlng.lng], {
+            icon: L.AwesomeMarkers.icon({
+                icon: iconName,
+                markerColor: 'red',
+                prefix: 'fas',
+                iconColor: 'white'
+            }),
+            draggable: true,
+            zIndexOffset: 1000
+        }).addTo(map)
+        .bindPopup('<div style="text-align: center;"><strong>📍 Marcador Arrastável</strong><br><small>Arraste para ajustar a posição</small><br><button onclick="window.draggableMarker.closePopup()" style="margin-top: 5px; padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">OK</button></div>', {autoClose: false})
+        .openPopup();
+        
+        // Atualizar coordenadas quando o marcador é arrastado
+        window.draggableMarker.on('drag', function(e) {
+            updateCoordenadasFromMarker();
+        });
+        
+        // Atualizar coordenadas quando o marcador para de ser arrastado
+        window.draggableMarker.on('dragend', function(e) {
+            updateCoordenadasFromMarker();
+            // Fechar popup após arrastar
+            if (window.draggableMarker.isPopupOpen()) {
+                setTimeout(() => window.draggableMarker.closePopup(), 1000);
+            }
+        });
+        
+        // Centralizar mapa no marcador inicialmente
+        map.setView([latlng.lat, latlng.lng], 17);
+    } else {
+        // Para outros tipos, esconder status do marcador
+        const statusMarcador = document.getElementById('status-marcador');
+        if (statusMarcador) {
+            statusMarcador.style.display = 'none';
+        }
+    }
 
     const titles = {
         'caso': 'Adicionar Caso de Dengue',
@@ -831,6 +1039,22 @@ function openForm(type, item, latlng, prefillData = null) {
     }, 100);
 }
 
+// Função para atualizar coordenadas do formulário a partir do marcador arrastável
+function updateCoordenadasFromMarker() {
+    if (window.draggableMarker) {
+        const latlng = window.draggableMarker.getLatLng();
+        document.getElementById('form-latitude').value = latlng.lat.toFixed(6);
+        document.getElementById('form-longitude').value = latlng.lng.toFixed(6);
+        
+        // Atualizar também a aba de endereço se estiver ativa
+        const enderecoResultado = document.getElementById('endereco-resultado');
+        if (enderecoResultado && enderecoResultado.style.display === 'block') {
+            document.getElementById('endereco-lat').textContent = latlng.lat.toFixed(6);
+            document.getElementById('endereco-lng').textContent = latlng.lng.toFixed(6);
+        }
+    }
+}
+
 // Função para atualizar descrição do tipo de foco
 function updateTipoDescricao() {
     const tipoSelect = document.getElementById('form-tipo');
@@ -897,6 +1121,13 @@ async function handleFormSubmit(e) {
 
         await loadDadosFromAPI();
         updateStats();
+        
+        // Remover marcador arrastável ao fechar
+        if (window.draggableMarker) {
+            map.removeLayer(window.draggableMarker);
+            window.draggableMarker = null;
+        }
+        
         document.getElementById('modal-form').classList.remove('active');
         
         const activePanel = document.querySelector('.panel.active').id;
@@ -1225,6 +1456,22 @@ function setupEventListeners() {
     document.getElementById('filter-origem-focos').addEventListener('change', (e) => {
         const tipo = document.getElementById('filter-tipo-focos').value;
         renderFocos(tipo, e.target.value);
+    });
+    
+    // Filtros por chips (origem)
+    document.querySelectorAll('.filter-chip[data-filter="origem"]').forEach(chip => {
+        chip.addEventListener('click', () => {
+            // Remover active de todos
+            document.querySelectorAll('.filter-chip[data-filter="origem"]').forEach(c => c.classList.remove('active'));
+            // Adicionar active ao clicado
+            chip.classList.add('active');
+            // Atualizar select oculto
+            const valor = chip.getAttribute('data-value');
+            document.getElementById('filter-origem-focos').value = valor;
+            // Aplicar filtro
+            const tipo = document.getElementById('filter-tipo-focos').value;
+            renderFocos(tipo, valor);
+        });
     });
 
     document.getElementById('filter-nivel-areas').addEventListener('change', (e) => {

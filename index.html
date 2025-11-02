@@ -165,27 +165,18 @@
                 <p class="panel-subtitle">Identifique e registre focos do Aedes aegypti</p>
             </div>
             
-            <div class="guide-steps compact">
-                <div class="step-item">
-                    <div class="step-icon"><i class="fas fa-hand-pointer"></i></div>
-                    <div class="step-content">
-                        <strong>1. Localize o foco</strong>
-                        <p>Clique no botão flutuante <i class="fas fa-bug" style="color: #667eea;"></i> ou diretamente no mapa</p>
-                    </div>
+            <div class="guide-steps compact" style="padding: 10px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px;">
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                    <span style="background: #667eea; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold;">1</span>
+                    <span style="font-size: 0.9rem;"><strong>Localize:</strong> Botão flutuante <i class="fas fa-bug" style="color: #667eea;"></i> ou clique no mapa</span>
                 </div>
-                <div class="step-item">
-                    <div class="step-icon"><i class="fas fa-tag"></i></div>
-                    <div class="step-content">
-                        <strong>2. Escolha o tipo</strong>
-                        <p>Selecione entre os 13 tipos de depósitos disponíveis</p>
-                    </div>
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                    <span style="background: #667eea; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold;">2</span>
+                    <span style="font-size: 0.9rem;"><strong>Selecione:</strong> Tipo de foco e origem</span>
                 </div>
-                <div class="step-item">
-                    <div class="step-icon"><i class="fas fa-save"></i></div>
-                    <div class="step-content">
-                        <strong>3. Complete o registro</strong>
-                        <p>Adicione descrição e confirme a localização</p>
-                    </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span style="background: #667eea; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold;">3</span>
+                    <span style="font-size: 0.9rem;"><strong>Arraste:</strong> Marcador para posição exata e salve</span>
                 </div>
             </div>
 
@@ -211,20 +202,28 @@
             </button>
 
             <div class="filters" style="margin-top: 15px;">
-                <label class="filter-label">
-                    <i class="fas fa-filter"></i> Filtrar por Origem:
-                    <span class="tooltip-icon" title="Filtre os focos pela forma como foram registrados">ⓘ</span>
+                <label class="filter-label" style="margin-bottom: 8px;">
+                    <i class="fas fa-filter"></i> Filtros Rápidos:
                 </label>
-                <select id="filter-origem-focos" style="margin-bottom: 10px;">
-                    <option value="todos">📍 Todas as Origens</option>
-                    <option value="vistoria">👨‍⚕️ Vistoria - Agente de Endemias</option>
-                    <option value="denuncia">👥 Denúncia Cidadã</option>
-                </select>
-                <label class="filter-label">
-                    <i class="fas fa-tags"></i> Filtrar por Tipo:
-                    <span class="tooltip-icon" title="Filtre pelos diferentes tipos de depósitos de água">ⓘ</span>
-                </label>
-                <select id="filter-tipo-focos">
+                
+                <!-- Filtros por Origem - Chips -->
+                <div class="filter-chips-group" style="margin-bottom: 12px;">
+                    <button class="filter-chip active" data-filter="origem" data-value="todos" id="chip-origem-todos">
+                        📍 Todos
+                    </button>
+                    <button class="filter-chip" data-filter="origem" data-value="vistoria" id="chip-origem-vistoria">
+                        👨‍⚕️ Vistoria
+                    </button>
+                    <button class="filter-chip" data-filter="origem" data-value="denuncia" id="chip-origem-denuncia">
+                        👥 Denúncia
+                    </button>
+                </div>
+                
+                <!-- Filtros por Tipo - Chips Compactos -->
+                <div class="filter-label" style="margin-bottom: 8px; margin-top: 12px;">
+                    <i class="fas fa-tags"></i> Por Tipo:
+                </div>
+                <select id="filter-tipo-focos" style="margin-bottom: 10px;">
                     <option value="todos">🔍 Todos os Tipos</option>
                     <optgroup label="1. Depósitos Fixos e Elevados">
                         <option value="caixa-dagua-cisterna">💧 Caixa d'água/Cisternas</option>
@@ -244,6 +243,13 @@
                         <option value="ralo-caixa-passagem">🚰 Ralos e Caixas de Passagem</option>
                     </optgroup>
                     <option value="outro">❓ Outro</option>
+                </select>
+                
+                <!-- Select oculto para origem (mantido para compatibilidade) -->
+                <select id="filter-origem-focos" style="display: none;">
+                    <option value="todos">Todas</option>
+                    <option value="vistoria">Vistoria</option>
+                    <option value="denuncia">Denúncia</option>
                 </select>
             </div>
 
@@ -557,11 +563,28 @@
                     
                     <!-- Aba: Marcar no Mapa -->
                     <div class="localizacao-tab-content active" id="content-loc-mapa">
+                        <!-- Busca Rápida de Endereço -->
+                        <div class="localizacao-rapida" style="margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">
+                                <i class="fas fa-search-location"></i> Busca Rápida:
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="busca-endereco-rapida" placeholder="Digite rua, bairro..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;">
+                                <button type="button" id="btn-buscar-rapida" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            <small style="color: #666; font-size: 0.75rem; display: block; margin-top: 5px;">
+                                <i class="fas fa-lightbulb"></i> Ou use o botão "Por Endereço" para busca detalhada
+                            </small>
+                        </div>
+                        
                         <div class="info-box" style="background: #e3f2fd; padding: 10px; margin-bottom: 10px; border-left: 3px solid #2196f3;">
-                            <p style="margin: 0; font-size: 0.85rem;">
-                                <i class="fas fa-info-circle"></i> Clique no mapa para definir a localização ou ajuste as coordenadas abaixo.
+                            <p style="margin: 0; font-size: 0.85rem;" id="info-localizacao">
+                                <i class="fas fa-info-circle"></i> <span id="texto-info-localizacao">Clique no mapa ou arraste o marcador vermelho para definir a localização.</span>
                             </p>
                         </div>
+                        
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label for="form-latitude" style="font-size: 0.85rem;">Latitude:</label>
@@ -572,9 +595,19 @@
                                 <input type="number" id="form-longitude" step="any" required>
                             </div>
                         </div>
-                        <button type="button" class="btn-secondary" id="btn-localizar-no-mapa" style="margin-top: 10px; padding: 8px; font-size: 0.9rem;">
-                            <i class="fas fa-crosshairs"></i> Usar Posição Atual do Mapa
-                        </button>
+                        
+                        <div style="display: flex; gap: 8px; margin-top: 10px;">
+                            <button type="button" class="btn-secondary" id="btn-localizar-no-mapa" style="flex: 1; padding: 8px; font-size: 0.9rem;">
+                                <i class="fas fa-crosshairs"></i> Centralizar
+                            </button>
+                            <button type="button" class="btn-secondary" id="btn-copiar-coordenadas" style="padding: 8px 12px; font-size: 0.9rem;" title="Copiar coordenadas">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                        
+                        <div id="status-marcador" style="margin-top: 10px; padding: 8px; background: #fff3cd; border-radius: 6px; font-size: 0.85rem; display: none;">
+                            <i class="fas fa-hand-paper" style="color: #ff9800;"></i> <strong>Marcador arrastável ativo:</strong> Arraste o marcador no mapa para ajustar a posição.
+                        </div>
                     </div>
                     
                     <!-- Aba: Por Endereço -->
